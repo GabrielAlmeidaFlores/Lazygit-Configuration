@@ -12,6 +12,23 @@ fi
 DIFF_STAT=$(git diff --cached --stat | head -n 15)
 DIFF_SNIPPET=$(git diff --cached --unified=3 | head -n 60)
 
+# Prompt user for additional context
+echo ""
+echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
+read -p "Context: " USER_CONTEXT
+echo ""
+
+# Build context section if user provided input
+CONTEXT_SECTION=""
+if [ -n "$USER_CONTEXT" ]; then
+  CONTEXT_SECTION="
+
+USER PROVIDED CONTEXT:
+$USER_CONTEXT
+
+Consider this context when categorizing the changes and suggesting the branch name."
+fi
+
 PROMPT="As a Senior Developer, categorize these git changes and suggest a branch name.
 
 FILES:
@@ -46,7 +63,8 @@ STRICT RULES:
 - DO NOT include emojis in the branch name.
 - Use kebab-case for the description.
 - Be SPECIFIC. (e.g., 'fix/auth-token-validation' NOT 'fix/bug').
-- Output ONLY the branch name. No explanations. No prose."
+- Output ONLY the branch name. No explanations. No prose.
+$CONTEXT_SECTION"
 
 RAW_NAME=$(generative_ia "$PROMPT" | tr -d '"' | xargs)
 if [ $? -ne 0 ]; then
@@ -56,55 +74,47 @@ fi
 
 CLEAN_NAME=$(echo "$RAW_NAME" | awk '{print $NF}' | tr -d '`')
 
+# Add emoji prefix based on branch type
 case "$CLEAN_NAME" in
 fix/*)
-  EMOJI="🐛"
+  FINAL_NAME="🐛$CLEAN_NAME"
   ;;
 feat/*)
-  EMOJI="✨"
+  FINAL_NAME="✨$CLEAN_NAME"
   ;;
 chore/*)
-  EMOJI="🔨"
+  FINAL_NAME="🔨$CLEAN_NAME"
   ;;
 refactor/*)
-  EMOJI="♻️"
+  FINAL_NAME="♻️$CLEAN_NAME"
   ;;
 docs/*)
-  EMOJI="📝"
+  FINAL_NAME="📝$CLEAN_NAME"
   ;;
 style/*)
-  EMOJI="💄"
+  FINAL_NAME="💄$CLEAN_NAME"
   ;;
 test/*)
-  EMOJI="✅"
+  FINAL_NAME="✅$CLEAN_NAME"
   ;;
 perf/*)
-  EMOJI="⚡"
+  FINAL_NAME="⚡$CLEAN_NAME"
   ;;
 *)
-  EMOJI=""
+  FINAL_NAME="$CLEAN_NAME"
   ;;
 esac
 
-echo -e "\n🤖 AI Suggested: \033[1;32m$CLEAN_NAME\033[0m"
-if [ -n "$EMOJI" ]; then
-  echo -e "   Emoji prefix: $EMOJI"
-fi
+echo -e "\n🤖 AI Suggested: \033[1;32m$FINAL_NAME\033[0m"
 
 read -p "Press [Enter] to create branch, [e] to edit, or [Ctrl+C] to cancel: " ACTION
 
 if [[ "$ACTION" == "e" ]]; then
   TEMP_BRANCH_FILE=$(mktemp)
-  echo "$CLEAN_NAME" >"$TEMP_BRANCH_FILE"
+  echo "$FINAL_NAME" >"$TEMP_BRANCH_FILE"
   ${EDITOR:-nano} "$TEMP_BRANCH_FILE"
   FINAL_NAME=$(cat "$TEMP_BRANCH_FILE")
   rm "$TEMP_BRANCH_FILE"
-else
-  FINAL_NAME="$CLEAN_NAME"
-fi
-
-if [ "$FINAL_NAME" == "$CLEAN_NAME" ] && [ -n "$EMOJI" ]; then
-  FINAL_NAME="$EMOJI-$FINAL_NAME"
 fi
 
 if [ -n "$FINAL_NAME" ]; then

@@ -11,6 +11,23 @@ fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
+# Prompt user for additional context
+echo ""
+echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
+read -p "Context: " USER_CONTEXT
+echo ""
+
+# Build context section if user provided input
+CONTEXT_SECTION=""
+if [ -n "$USER_CONTEXT" ]; then
+  CONTEXT_SECTION="
+
+USER PROVIDED CONTEXT:
+$USER_CONTEXT
+
+Consider this context when analyzing the changes and generating the commit message."
+fi
+
 
 PROMPT="As a Senior Staff Engineer, perform a deep technical analysis of this diff.
 Your task is to generate a professional, high-quality git commit message.
@@ -41,6 +58,7 @@ ANALYSIS REQUIREMENTS:
 - Identify the specific class, function, or component being changed.
 - If multiple things changed, list them as separate technical bullets.
 - Output ONLY the commit message. No conversational filler.
+$CONTEXT_SECTION
 
 DIFF:
 $DIFF_SNIPPET"
