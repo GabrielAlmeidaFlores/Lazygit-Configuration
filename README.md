@@ -14,6 +14,7 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
 
 - **Human-in-the-Loop** - Review and edit all suggestions before applying
 - **Interactive Editing** - Integrated editor support (nano, vim, etc.)
+- **Optional Context Input** - Provide additional context to the AI for better results
 - **English Standardization** - Consistent English-only output for international teams
 
 ### Customization
@@ -44,8 +45,8 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
 2. Make scripts executable:
 
    ```bash
-   chmod +x ~/.config/lazygit/gen_*.sh
-   chmod +x ~/.config/lazygit/gateways/*.sh
+   chmod +x ~/.config/lazygit/commands/*.sh
+   chmod +x ~/.config/lazygit/commands/gateways/*.sh
    ```
 
 3. **(Optional)** For AI features, install and authenticate GitHub Copilot CLI:
@@ -55,7 +56,7 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
    copilot auth
    ```
 
-   Or configure a different AI provider in `gateways/generative-ia.sh`
+   Or configure a different AI provider in `commands/gateways/generative-ia.sh`
 
 ## Quick Start
 
@@ -94,8 +95,10 @@ Simply stage your changes and press the corresponding key!
 ## Branch Name Format
 
 ```
-<emoji>-<type>/<descriptive-name>
+<emoji><type>/<descriptive-name>
 ```
+
+Example: `🐛fix/auth-token-validation`
 
 ### Branch Prefix Mapping
 
@@ -114,12 +117,13 @@ Simply stage your changes and press the corresponding key!
 
 ```
 ~/.config/lazygit/
-├── gateways/
-│   └── generative-ia.sh      # AI service gateway (modular)
-├── gen_commit_with_ia.sh     # Commit message generator
-├── gen_branch_with_ia.sh     # Branch name generator
-├── config.yml                # LazyGit configuration & theme
-└── README.md                 # Documentation
+├── commands/
+│   ├── gateways/
+│   │   └── generative-ia.sh      # AI service gateway (modular)
+│   ├── gen_commit_with_ia.sh     # Commit message generator
+│   └── gen_branch_with_ia.sh     # Branch name generator
+├── config.yml                    # LazyGit configuration & theme
+└── README.md                     # Documentation
 ```
 
 ## Available Commands
@@ -130,15 +134,21 @@ Simply stage your changes and press the corresponding key!
 
 1. Stage your changes in LazyGit
 2. Press `C` in the files view
-3. Review the generated message
-4. Press `[Enter]` to commit or `[e]` to edit
+3. **(Optional)** Provide additional context to help the AI understand your changes
+   - Press `[Enter]` to skip if no context is needed
+   - Example context: "Refactoring for better performance" or "Part of authentication redesign"
+4. Review the generated message
+5. Press `[Enter]` to commit or `[e]` to edit
 
 #### Generate Branch Name (`B`)
 
 1. Stage your changes in LazyGit
 2. Press `B` in the files view
-3. Review the generated name with emoji
-4. Press `[Enter]` to create branch or `[e]` to edit
+3. **(Optional)** Provide additional context to help the AI categorize your changes
+   - Press `[Enter]` to skip if no context is needed
+   - Example context: "Working on user authentication" or "Fixing payment bug"
+4. Review the generated name with emoji
+5. Press `[Enter]` to create branch or `[e]` to edit
 
 ## Configuration
 
@@ -151,12 +161,12 @@ customCommands:
   - key: "C"
     context: "files"
     description: "Generate commit message"
-    command: "bash ~/.config/lazygit/gen_commit_with_ia.sh"
+    command: "bash ~/.config/lazygit/commands/gen_commit_with_ia.sh"
     output: terminal
   - key: "B"
     context: "files"
     description: "Generate branch name"
-    command: "bash ~/.config/lazygit/gen_branch_with_ia.sh"
+    command: "bash ~/.config/lazygit/commands/gen_branch_with_ia.sh"
     output: terminal
 ```
 
@@ -181,14 +191,14 @@ See `config.yml` for complete theme definitions.
 
 The modular architecture makes it easy to add new commands:
 
-1. Create a new script in the root directory (e.g., `gen_something.sh`)
+1. Create a new script in the `commands/` directory (e.g., `commands/gen_something.sh`)
 2. Source any gateways you need: `source "$SCRIPT_DIR/gateways/generative-ia.sh"`
 3. Implement your logic
 4. Add a custom command in `config.yml`
 
 ### Using Different AI Providers
 
-Edit `gateways/generative-ia.sh` to use any AI service:
+Edit `commands/gateways/generative-ia.sh` to use any AI service:
 
 ```bash
 # Example: Switch to OpenAI CLI
@@ -204,13 +214,13 @@ You can also create additional gateways for different services.
 
 Each generator script has a `PROMPT` variable you can customize:
 
-**For commit messages** - Edit `gen_commit_with_ia.sh`:
+**For commit messages** - Edit `commands/gen_commit_with_ia.sh`:
 
 ```bash
 PROMPT="Your custom instructions here..."
 ```
 
-**For branch names** - Edit `gen_branch_with_ia.sh`:
+**For branch names** - Edit `commands/gen_branch_with_ia.sh`:
 
 ```bash
 PROMPT="Your custom instructions here..."
@@ -218,7 +228,7 @@ PROMPT="Your custom instructions here..."
 
 ### Adjusting Behavior
 
-Modify settings in `gateways/generative-ia.sh`:
+Modify settings in `commands/gateways/generative-ia.sh`:
 
 ```bash
 MAX_RETRIES=2  # Number of retry attempts
@@ -232,8 +242,8 @@ TIMEOUT=30     # Request timeout in seconds
 **AI features not working**
 
 - Verify your AI provider is installed and authenticated
-- Check the binary path in `gateways/generative-ia.sh`
-- Test directly: `./gateways/generative-ia.sh "test prompt"`
+- Check the binary path in `commands/gateways/generative-ia.sh`
+- Test directly: `./commands/gateways/generative-ia.sh "test prompt"`
 
 **No staged changes error**
 
@@ -247,7 +257,7 @@ TIMEOUT=30     # Request timeout in seconds
 
 **Permission denied**
 
-- Make scripts executable: `chmod +x ~/.config/lazygit/**/*.sh`
+- Make scripts executable: `chmod +x ~/.config/lazygit/commands/**/*.sh`
 
 ## Examples
 
@@ -265,6 +275,12 @@ TIMEOUT=30     # Request timeout in seconds
 - Add error handling for invalid tokens
 ```
 
+**With User Context:**
+
+If you provide context like: `"Part of security enhancement for API endpoints"`
+
+The AI will consider this additional information when generating the commit message, potentially providing more detailed explanations about the security improvements.
+
 ### Branch Name Generation
 
 **Scenario:** Staged changes fixing a bug in authentication
@@ -272,8 +288,38 @@ TIMEOUT=30     # Request timeout in seconds
 **Generated Output:**
 
 ```
-🐛-fix/auth-token-validation
+🐛fix/auth-token-validation
 ```
+
+**With User Context:**
+
+If you provide context like: `"Fixing token expiration issue from bug report #123"`
+
+The AI will better understand this is a fix (not a feature) and might suggest a more specific name like: `🐛fix/token-expiration-validation`
+
+## Tips for Using Context
+
+### When to Provide Context
+
+- **Complex changes** - When the diff alone might not explain the full picture
+- **Multi-purpose changes** - When changes serve a specific goal not obvious from code
+- **Bug fixes** - Reference issue numbers or describe the problem being solved
+- **Refactoring** - Explain the reason for restructuring (e.g., "performance optimization")
+- **Part of larger feature** - Mention the overall feature being worked on
+
+### Context Examples
+
+Good context inputs:
+- `"Part of user authentication redesign"`
+- `"Fixing memory leak reported in production"`
+- `"Refactoring for better testability"`
+- `"Implementing requirements from ticket #456"`
+- `"Performance optimization for large datasets"`
+
+Less helpful context:
+- `"Update code"` (too vague)
+- `"Fix bug"` (AI can infer this from the diff)
+- Very long explanations (keep it concise)
 
 ## Contributing
 
