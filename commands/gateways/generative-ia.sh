@@ -32,7 +32,7 @@
 #     ./generative-ia.sh "Your prompt here"
 #     ./generative-ia.sh "Your prompt here" 1          # with verbose/thinking output
 
-COPILOT_BIN="/home/flores/.nvm/versions/node/v22.15.0/bin/copilot"
+COPILOT_BIN="$(which copilot)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/../../config.env"
