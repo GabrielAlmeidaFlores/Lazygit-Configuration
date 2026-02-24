@@ -8,7 +8,8 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
 
 - **AI-Powered Commit Messages** - Generate professional, conventional commit messages with gitmoji
 - **AI-Powered Branch Names** - Generate descriptive branch names with automatic emoji prefixes
-- **Smart Git Workflows** - Automated best practices and conventions
+- **AI Thinking Output** - See the AI reasoning process in real-time as it generates results
+- **Configurable AI Model** - Easily switch between GPT, Claude, and Gemini models via `config.env`
 
 ### User Experience
 
@@ -122,6 +123,7 @@ Example: `🐛fix/auth-token-validation`
 │   │   └── generative-ia.sh      # AI service gateway (modular)
 │   ├── gen_commit_with_ia.sh     # Commit message generator
 │   └── gen_branch_with_ia.sh     # Branch name generator
+├── config.env                    # AI configuration (model, retries, timeout)
 ├── config.yml                    # LazyGit configuration & theme
 └── README.md                     # Documentation
 ```
@@ -151,6 +153,25 @@ Example: `🐛fix/auth-token-validation`
 5. Press `[Enter]` to create branch or `[e]` to edit
 
 ## Configuration
+
+### AI Model & Behavior
+
+All AI settings are configured in `config.env` at the project root:
+
+```bash
+# config.env
+MODEL="gpt-4.1"   # Change model here
+MAX_RETRIES=2
+TIMEOUT=30
+```
+
+Available models:
+
+| Provider | Models |
+| -------- | ------ |
+| GPT      | `gpt-4.1`, `gpt-5-mini`, `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5.2`, `gpt-5.3-codex` |
+| Claude   | `claude-haiku-4.5`, `claude-sonnet-4.5`, `claude-sonnet-4.6`, `claude-opus-4.5`, `claude-opus-4.6` |
+| Gemini   | `gemini-3-pro-preview` |
 
 ### Adding Custom Commands
 
@@ -228,11 +249,12 @@ PROMPT="Your custom instructions here..."
 
 ### Adjusting Behavior
 
-Modify settings in `commands/gateways/generative-ia.sh`:
+Modify settings in `config.env` at the project root:
 
 ```bash
-MAX_RETRIES=2  # Number of retry attempts
-TIMEOUT=30     # Request timeout in seconds
+MODEL="gpt-4.1"  # AI model to use
+MAX_RETRIES=2    # Number of retry attempts
+TIMEOUT=30       # Request timeout in seconds
 ```
 
 ## Troubleshooting
@@ -243,6 +265,7 @@ TIMEOUT=30     # Request timeout in seconds
 
 - Verify your AI provider is installed and authenticated
 - Check the binary path in `commands/gateways/generative-ia.sh`
+- Check your model setting in `config.env`
 - Test directly: `./commands/gateways/generative-ia.sh "test prompt"`
 
 **No staged changes error**

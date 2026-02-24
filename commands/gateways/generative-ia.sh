@@ -35,7 +35,7 @@
 COPILOT_BIN="/home/flores/.nvm/versions/node/v22.15.0/bin/copilot"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/../config.env"
+CONFIG_FILE="$SCRIPT_DIR/../../config.env"
 if [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
 else
