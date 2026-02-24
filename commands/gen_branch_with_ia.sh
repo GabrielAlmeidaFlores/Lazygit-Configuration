@@ -18,6 +18,8 @@ echo "📋 Optional: Provide additional context for the AI (press Enter to skip)
 read -p "Context: " USER_CONTEXT
 echo ""
 
+VERBOSE=1
+
 # Build context section if user provided input
 CONTEXT_SECTION=""
 if [ -n "$USER_CONTEXT" ]; then
@@ -66,7 +68,7 @@ STRICT RULES:
 - Output ONLY the branch name. No explanations. No prose.
 $CONTEXT_SECTION"
 
-RAW_NAME=$(generative_ia "$PROMPT" | tr -d '"' | xargs)
+RAW_NAME=$(generative_ia "$PROMPT" "$VERBOSE" | tr -d '"' | xargs)
 if [ $? -ne 0 ]; then
   echo "❌ Error: Failed to get AI response."
   exit 1
