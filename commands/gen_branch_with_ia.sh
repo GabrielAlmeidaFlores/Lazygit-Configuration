@@ -2,7 +2,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
-
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
 if [ -z "$FILES_CHANGED" ]; then
   echo "❌ Error: No changes staged."
@@ -12,7 +11,6 @@ fi
 DIFF_STAT=$(git diff --cached --stat | head -n 15)
 DIFF_SNIPPET=$(git diff --cached --unified=3 | head -n 60)
 
-# Prompt user for additional context
 echo ""
 echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
 read -p "Context: " USER_CONTEXT
@@ -20,7 +18,6 @@ echo ""
 
 VERBOSE=1
 
-# Build context section if user provided input
 CONTEXT_SECTION=""
 if [ -n "$USER_CONTEXT" ]; then
   CONTEXT_SECTION="
@@ -76,7 +73,6 @@ fi
 
 CLEAN_NAME=$(echo "$RAW_NAME" | awk '{print $NF}' | tr -d '`')
 
-# Add emoji prefix based on branch type
 case "$CLEAN_NAME" in
 fix/*)
   FINAL_NAME="🐛$CLEAN_NAME"
