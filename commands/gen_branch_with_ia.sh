@@ -73,35 +73,7 @@ fi
 
 CLEAN_NAME=$(echo "$RAW_NAME" | awk '{print $NF}' | tr -d '`')
 
-case "$CLEAN_NAME" in
-fix/*)
-  FINAL_NAME="🐛$CLEAN_NAME"
-  ;;
-feat/*)
-  FINAL_NAME="✨$CLEAN_NAME"
-  ;;
-chore/*)
-  FINAL_NAME="🔨$CLEAN_NAME"
-  ;;
-refactor/*)
-  FINAL_NAME="♻️$CLEAN_NAME"
-  ;;
-docs/*)
-  FINAL_NAME="📝$CLEAN_NAME"
-  ;;
-style/*)
-  FINAL_NAME="💄$CLEAN_NAME"
-  ;;
-test/*)
-  FINAL_NAME="✅$CLEAN_NAME"
-  ;;
-perf/*)
-  FINAL_NAME="⚡$CLEAN_NAME"
-  ;;
-*)
-  FINAL_NAME="$CLEAN_NAME"
-  ;;
-esac
+FINAL_NAME="$CLEAN_NAME"
 
 echo -e "\n🤖 AI Suggested: \033[1;32m$FINAL_NAME\033[0m"
 
