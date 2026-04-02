@@ -11,6 +11,8 @@ fi
 DIFF_STAT=$(git diff --cached --stat | head -n 15)
 DIFF_SNIPPET=$(git diff --cached --unified=3 | head -n 60)
 
+select_model
+
 echo ""
 echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
 read -p "Context: " USER_CONTEXT
@@ -65,13 +67,23 @@ STRICT RULES:
 - Output ONLY the branch name. No explanations. No prose.
 $CONTEXT_SECTION"
 
-RAW_NAME=$(generative_ia "$PROMPT" "$VERBOSE" | tr -d '"' | xargs)
-if [ $? -ne 0 ]; then
+RAW_NAME=$(generative_ia "$PROMPT" "$VERBOSE")
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 130 ]; then
+  exit 0
+fi
+if [ $EXIT_CODE -ne 0 ]; then
   echo "❌ Error: Failed to get AI response."
   exit 1
 fi
 
-CLEAN_NAME=$(echo "$RAW_NAME" | awk '{print $NF}' | tr -d '`')
+# Extract a valid branch name: must match the pattern prefix/description
+CLEAN_NAME=$(echo "$RAW_NAME" | grep -oE '(feat|fix|chore|refactor|docs|test|ci|hotfix)/[a-z0-9][a-z0-9-]*' | head -n1)
+
+if [ -z "$CLEAN_NAME" ]; then
+  # Fallback: strip everything except valid branch chars and use last word
+  CLEAN_NAME=$(echo "$RAW_NAME" | tr -d '`()[]{}!@#$%^&*+=|\\<>?,;:'"'"'"' | grep -oE '[a-z0-9/][a-z0-9/_-]*' | tail -n1)
+fi
 
 FINAL_NAME="$CLEAN_NAME"
 

@@ -10,6 +10,8 @@ fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
+select_model
+
 echo ""
 read -p "📋 Optional Context (Enter to skip): " USER_CONTEXT
 echo ""
@@ -50,7 +52,11 @@ CRITICAL RULES:
 "
 
 RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
-if [ $? -ne 0 ]; then
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 130 ]; then
+  exit 0
+fi
+if [ $EXIT_CODE -ne 0 ]; then
   echo "❌ Error: Failed to get AI response."
   exit 1
 fi
