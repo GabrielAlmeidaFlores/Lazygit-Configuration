@@ -36,11 +36,11 @@ customCommands:
   - key: "C"
     context: "files"
     description: "Generate AI commit message (Direct Variable)"
-    command: "bash ~/.config/lazygit/gen_commit_with_ia.sh"
+    command: "bash ~/.config/lazygit/commands/gen_commit_with_ia.sh"
     output: terminal
 
   - key: "B"
     context: "files"
     description: "Auto-generate Emoji AI branch (Comprehensive)"
-    command: "bash ~/.config/lazygit/gen_branch_with_ia.sh"
+    command: "bash ~/.config/lazygit/commands/gen_branch_with_ia.sh"
     output: terminal
