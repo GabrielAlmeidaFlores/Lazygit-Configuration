@@ -2,7 +2,6 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
-
 FILES=$(git diff --cached --name-only | head -n 15 | tr '\n' ', ')
 if [ -z "$FILES" ]; then
   echo "❌ Error: No changes staged."
@@ -11,59 +10,44 @@ fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
-# Prompt user for additional context
 echo ""
-echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
-read -p "Context: " USER_CONTEXT
+read -p "📋 Optional Context (Enter to skip): " USER_CONTEXT
 echo ""
 
 VERBOSE=1
 
-# Build context section if user provided input
 CONTEXT_SECTION=""
 if [ -n "$USER_CONTEXT" ]; then
-  CONTEXT_SECTION="
-
-USER PROVIDED CONTEXT:
-$USER_CONTEXT
-
-Consider this context when analyzing the changes and generating the commit message."
+  CONTEXT_SECTION="USER PROVIDED CONTEXT: $USER_CONTEXT"
 fi
 
+PROMPT="
+Analyze the following DIFF code and follow the instructions below.
 
-PROMPT="As a Senior Staff Engineer, perform a deep technical analysis of this diff.
-Your task is to generate a professional, high-quality git commit message.
+### START OF DIFF ###
+$DIFF_SNIPPET
+### END OF DIFF ###
 
-FILES MODIFIED: $FILES
-
-STRICT STRUCTURE:
-1. <gitmoji> <type>(<scope>): <summary>
-   [blank line]
-   - <Detailed Bullet Points>
-
-LANGUAGE REQUIREMENT (CRITICAL):
-- MUST use ONLY English language for the entire commit message.
-- NO Spanish, Portuguese, or any other language allowed.
-- All technical terms, descriptions, and explanations MUST be in English.
-
-MAPPING RULES (MANDATORY):
-- New logic/functionality? ✨ feat
-- Fixing a bug/error? 🐛 fix
-- Refactoring/Cleaning code? ♻️ refactor
-- Build/Config/CI/Docker? 🔧 chore
-- Docs/Comments? 📝 docs
-- CSS/Styling/UI? 💄 style
-
-ANALYSIS REQUIREMENTS:
-- Do not be vague. 'Update files' is forbidden.
-- Explain the 'WHY' behind the change.
-- Identify the specific class, function, or component being changed.
-- If multiple things changed, list them as separate technical bullets.
-- Output ONLY the commit message. No conversational filler.
 $CONTEXT_SECTION
 
-DIFF:
-$DIFF_SNIPPET"
+INSTRUCTIONS FOR SENIOR STAFF ENGINEER:
+Generate a Pull Request-style summary based on the DIFF above.
+
+STRICT STRUCTURE:
+1. Single-line title (max 70 chars).
+2. A blank line.
+3. Detailed overview paragraph (3-4 sentences) explaining 'what' and 'why'.
+4. Section: **<Category 1>**:
+   - Bullet points for technical 'how' using \`inline code\`.
+5. Section: **<Category 2>**:
+   - Bullet points for logic details.
+
+CRITICAL RULES:
+- NO PREAMBLE: Start directly with the title. No 'Here is...' or 'Sure'.
+- LANGUAGE: STRICT English.
+- NO CODE COMPLETION: Do not try to finish the code in the diff.
+- OUTPUT: ONLY the message.
+"
 
 RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
 if [ $? -ne 0 ]; then
@@ -71,12 +55,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+TEMP_MSG_FILE=$(mktemp)
+
 echo -e "\n📝 AI Suggested Commit Message:\n"
 echo -e "----------------------------------------"
 echo -e "\033[1;32m$RAW_MSG\033[0m"
 echo -e "----------------------------------------\n"
 
-TEMP_MSG_FILE=$(mktemp)
 echo "$RAW_MSG" >"$TEMP_MSG_FILE"
 
 read -p "Press [Enter] to commit, [e] to edit, or [Ctrl+C] to cancel: " ACTION
@@ -87,7 +72,7 @@ if [[ "$ACTION" == "e" ]]; then
 fi
 
 if [ -n "$RAW_MSG" ]; then
-  git commit -m "$RAW_MSG"
+  git commit -F "$TEMP_MSG_FILE"
   echo "✅ Committed successfully!"
 else
   echo "❌ Error: Message is empty. Commit aborted."
