@@ -17,6 +17,8 @@ echo "📋 Optional: Provide additional context for the AI (press Enter to skip)
 read -p "Context: " USER_CONTEXT
 echo ""
 
+VERBOSE=1
+
 # Build context section if user provided input
 CONTEXT_SECTION=""
 if [ -n "$USER_CONTEXT" ]; then
@@ -63,7 +65,7 @@ $CONTEXT_SECTION
 DIFF:
 $DIFF_SNIPPET"
 
-RAW_MSG=$(generative_ia "$PROMPT")
+RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
 if [ $? -ne 0 ]; then
   echo "❌ Error: Failed to get AI response."
   exit 1

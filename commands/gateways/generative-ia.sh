@@ -2,15 +2,16 @@
 # Gateway for interacting with AI/LLM services
 # Currently configured to use GitHub Copilot CLI
 #
-# Configuration:
-#   COPILOT_BIN - Path to the Copilot CLI binary
+# Configuration (via commands/config.env):
+#   MODEL       - AI model to use (default: gpt-4.1)
 #   MAX_RETRIES - Number of retry attempts (default: 2)
-#   TIMEOUT - Request timeout in seconds (default: 30)
+#   TIMEOUT     - Request timeout in seconds (default: 30)
 #
-# Function: generative_ia(prompt)
+# Function: generative_ia(prompt, [verbose])
 #   Sends a prompt to the AI service and returns the response
 #   Parameters:
-#     prompt (string) - The text prompt to send to the AI
+#     prompt   (string)  - The text prompt to send to the AI
+#     verbose  (0|1)     - When 1, prints AI thinking/progress to stderr
 #   Returns:
 #     Success (0) - Outputs the AI response to stdout
 #     Failure (1) - Outputs error message to stderr
@@ -26,15 +27,27 @@
 #   As a sourced function:
 #     source /path/to/generative-ia.sh
 #     response=$(generative_ia "Your prompt here")
+#     response=$(generative_ia "Your prompt here" 1)   # with verbose/thinking output
 #   As a standalone script:
 #     ./generative-ia.sh "Your prompt here"
+#     ./generative-ia.sh "Your prompt here" 1          # with verbose/thinking output
 
 COPILOT_BIN="/home/flores/.nvm/versions/node/v22.15.0/bin/copilot"
-MAX_RETRIES=2
-TIMEOUT=30
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/../config.env"
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+else
+  echo "⚠️  Warning: config.env not found at $CONFIG_FILE, using defaults" >&2
+  MODEL="gpt-4.1"
+  MAX_RETRIES=2
+  TIMEOUT=30
+fi
 
 generative_ia() {
   local PROMPT="$1"
+  local VERBOSE="${2:-0}"
 
   if [ -z "$PROMPT" ]; then
     echo "❌ Error: No prompt provided to generative_ia" >&2
@@ -46,11 +59,19 @@ generative_ia() {
     return 1
   fi
 
+  if [ "$VERBOSE" = "1" ]; then
+    echo "🧠 AI thinking..." >&2
+  fi
+
   local ATTEMPT=1
   local RESPONSE=""
 
   while [ $ATTEMPT -le $MAX_RETRIES ]; do
-    RESPONSE=$(timeout $TIMEOUT "$COPILOT_BIN" -p "$PROMPT" --silent 2>&1)
+    if [ "$VERBOSE" = "1" ]; then
+      RESPONSE=$(timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT")
+    else
+      RESPONSE=$(timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" --silent 2>&1)
+    fi
     local EXIT_CODE=$?
 
     if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
@@ -77,10 +98,10 @@ generative_ia() {
 
 if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
   if [ $# -eq 0 ]; then
-    echo "Usage: $0 \"Your prompt here\"" >&2
-    echo "   or: source $0 && generative_ia \"Your prompt here\"" >&2
+    echo "Usage: $0 \"Your prompt here\" [verbose]" >&2
+    echo "   or: source $0 && generative_ia \"Your prompt here\" [1]" >&2
     exit 1
   fi
 
-  generative_ia "$1"
+  generative_ia "$1" "${2:-0}"
 fi
