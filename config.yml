@@ -27,6 +27,7 @@ gui:
     branchColor:
       - "#ff79c6"
       - bold
+
 git:
   pagers:
     - colorArg: always
