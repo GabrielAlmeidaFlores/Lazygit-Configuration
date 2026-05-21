@@ -1,0 +1,46 @@
+gui:
+  theme:
+    activeBorderColor:
+      - "#bd93f9"
+      - bold
+    inactiveBorderColor:
+      - "#6272a4"
+    searchingActiveBorderColor:
+      - "#f1fa8c"
+      - bold
+    selectedLineBgColor:
+      - "#44475a"
+    selectedRangeBgColor:
+      - "#44475a"
+    cherryPickedCommitFgColor:
+      - "#8be9fd"
+    cherryPickedCommitBgColor:
+      - "#bd93f9"
+    unstagedChangesColor:
+      - "#ff5555"
+    defaultFgColor:
+      - "#f8f8f2"
+    optionsTextColor:
+      - "#8be9fd"
+    stagedChangesColor:
+      - "#50fa7b"
+    branchColor:
+      - "#ff79c6"
+      - bold
+git:
+  pagers:
+    - colorArg: always
+      pager: delta --dark --paging=never --syntax-theme=Dracula
+
+customCommands:
+  - key: "C"
+    context: "files"
+    description: "Generate AI commit message (Direct Variable)"
+    command: "bash ~/.config/lazygit/gen_commit_with_ia.sh"
+    output: terminal
+
+  - key: "B"
+    context: "files"
+    description: "Auto-generate Emoji AI branch (Comprehensive)"
+    command: "bash ~/.config/lazygit/gen_branch_with_ia.sh"
+    output: terminal
