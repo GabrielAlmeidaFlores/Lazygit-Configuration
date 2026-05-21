@@ -107,9 +107,9 @@ generative_ia() {
 
   while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
     if [ "$VERBOSE" = "1" ]; then
-      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" >"$_TEMP_OUT" 2>&1 &
+      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
     else
-      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>&1 &
+      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
     fi
     _AI_PID=$!
     wait "$_AI_PID"
