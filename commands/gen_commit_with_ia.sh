@@ -10,9 +10,6 @@ fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
-select_model
-
-echo ""
 read -p "📋 Optional Context (Enter to skip): " USER_CONTEXT
 echo ""
 
@@ -36,7 +33,7 @@ INSTRUCTIONS FOR SENIOR STAFF ENGINEER:
 Generate a Pull Request-style summary based on the DIFF above.
 
 STRICT STRUCTURE:
-1. Single-line title (max 70 chars).
+1. Single-line title (max 30 chars).
 2. A blank line.
 3. Detailed overview paragraph (3-4 sentences) explaining 'what' and 'why'.
 4. Section: **<Category 1>**:
@@ -46,7 +43,6 @@ STRICT STRUCTURE:
 
 CRITICAL RULES:
 - NO PREAMBLE: Start directly with the title. No 'Here is...' or 'Sure'.
-- LANGUAGE: STRICT English.
 - NO CODE COMPLETION: Do not try to finish the code in the diff.
 - OUTPUT: ONLY the message.
 "

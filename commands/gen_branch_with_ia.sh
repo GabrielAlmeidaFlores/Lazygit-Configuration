@@ -11,8 +11,6 @@ fi
 DIFF_STAT=$(git diff --cached --stat | head -n 15)
 DIFF_SNIPPET=$(git diff --cached --unified=3 | head -n 60)
 
-select_model
-
 echo ""
 echo "📋 Optional: Provide additional context for the AI (press Enter to skip):"
 read -p "Context: " USER_CONTEXT

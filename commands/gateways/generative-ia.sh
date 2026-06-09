@@ -3,7 +3,6 @@
 # Currently configured to use GitHub Copilot CLI
 #
 # Configuration (via commands/config.env):
-#   AVAILABLE_MODELS - Array of AI models; first entry is the default
 #   MAX_RETRIES      - Number of retry attempts (default: 2)
 #   TIMEOUT          - Request timeout in seconds (default: 30)
 #
@@ -40,37 +39,9 @@ if [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
 else
   echo "⚠️  Warning: config.env not found at $CONFIG_FILE, using defaults" >&2
-  AVAILABLE_MODELS=("gpt-4.1")
   MAX_RETRIES=2
   TIMEOUT=30
 fi
-
-MODEL="${AVAILABLE_MODELS[0]:-gpt-4.1}"
-
-select_model() {
-  local count=${#AVAILABLE_MODELS[@]}
-  echo "🤖 Select AI model:"
-  for ((i = 0; i < count; i++)); do
-    local label=""
-    [ $i -eq 0 ] && label=" (default)"
-    echo "  $((i + 1))) ${AVAILABLE_MODELS[$i]}$label"
-  done
-  echo ""
-  read -p "Choose [1-$count] (Enter for default): " MODEL_CHOICE
-  echo ""
-
-  if [[ -z "$MODEL_CHOICE" ]]; then
-    MODEL="${AVAILABLE_MODELS[0]}"
-  elif [[ "$MODEL_CHOICE" =~ ^[0-9]+$ ]] && [ "$MODEL_CHOICE" -ge 1 ] && [ "$MODEL_CHOICE" -le "$count" ]; then
-    MODEL="${AVAILABLE_MODELS[$((MODEL_CHOICE - 1))]}"
-  else
-    echo "⚠️  Invalid choice, using default: ${AVAILABLE_MODELS[0]}" >&2
-    MODEL="${AVAILABLE_MODELS[0]}"
-  fi
-
-  echo "✅ Using model: $MODEL"
-  echo ""
-}
 
 generative_ia() {
   local PROMPT="$1"
@@ -107,9 +78,9 @@ generative_ia() {
 
   while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
     if [ "$VERBOSE" = "1" ]; then
-      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      timeout $TIMEOUT "$COPILOT_BIN" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
     else
-      timeout $TIMEOUT "$COPILOT_BIN" --model "$MODEL" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
+      timeout $TIMEOUT "$COPILOT_BIN" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
     fi
     _AI_PID=$!
     wait "$_AI_PID"
