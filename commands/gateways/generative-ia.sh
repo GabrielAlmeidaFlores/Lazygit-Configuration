@@ -3,7 +3,9 @@
 # Currently configured to use GitHub Copilot CLI
 #
 # Configuration (via commands/config.env):
-#   MAX_RETRIES      - Number of retry attempts (default: 2)
+#   MODEL            - Primary AI model (empty = Copilot default)
+#   FALLBACK_MODEL   - Fallback model if primary fails (empty = no fallback)
+#   MAX_RETRIES      - Number of retry attempts per model (default: 2)
 #   TIMEOUT          - Request timeout in seconds (default: 30)
 #
 # Function: generative_ia(prompt, [verbose])
@@ -70,45 +72,72 @@ generative_ia() {
   }
   trap '_ai_cancel' INT
 
-  if [ "$VERBOSE" = "1" ]; then
-    echo "🧠 AI thinking... (Ctrl+C to cancel)" >&2
+  # Build list of models to try: primary, then fallback
+  local MODELS_TO_TRY=()
+  if [ -n "$MODEL" ]; then
+    MODELS_TO_TRY+=("$MODEL")
+  else
+    MODELS_TO_TRY+=("")  # empty = use Copilot default
+  fi
+  if [ -n "$FALLBACK_MODEL" ] && [ "$FALLBACK_MODEL" != "$MODEL" ]; then
+    MODELS_TO_TRY+=("$FALLBACK_MODEL")
   fi
 
-  local ATTEMPT=1
-
-  while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
-    if [ "$VERBOSE" = "1" ]; then
-      timeout $TIMEOUT "$COPILOT_BIN" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
-    else
-      timeout $TIMEOUT "$COPILOT_BIN" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
-    fi
-    _AI_PID=$!
-    wait "$_AI_PID"
-    local EXIT_CODE=$?
-    _AI_PID=""
-
+  for CURRENT_MODEL in "${MODELS_TO_TRY[@]}"; do
     [ $_CANCELLED -eq 1 ] && break
 
-    local RESPONSE
-    RESPONSE=$(cat "$_TEMP_OUT")
-
-    if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
-      rm -f "$_TEMP_OUT"
-      trap - INT
-      echo "$RESPONSE"
-      return 0
+    local MODEL_ARGS=()
+    local MODEL_LABEL="default"
+    if [ -n "$CURRENT_MODEL" ]; then
+      MODEL_ARGS=(--model "$CURRENT_MODEL")
+      MODEL_LABEL="$CURRENT_MODEL"
     fi
 
-    if [ $EXIT_CODE -eq 124 ]; then
-      echo "⚠️  Warning: AI call timed out (attempt $ATTEMPT/$MAX_RETRIES)" >&2
-    else
-      echo "⚠️  Warning: AI call failed with exit code $EXIT_CODE (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+    if [ "$VERBOSE" = "1" ]; then
+      echo "🧠 AI thinking ($MODEL_LABEL)... (Ctrl+C to cancel)" >&2
     fi
 
-    ATTEMPT=$((ATTEMPT + 1))
+    local ATTEMPT=1
 
-    if [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; then
-      sleep $((2 ** (ATTEMPT - 1)))
+    while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
+      if [ "$VERBOSE" = "1" ]; then
+        timeout $TIMEOUT "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      else
+        timeout $TIMEOUT "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
+      fi
+      _AI_PID=$!
+      wait "$_AI_PID"
+      local EXIT_CODE=$?
+      _AI_PID=""
+
+      [ $_CANCELLED -eq 1 ] && break
+
+      local RESPONSE
+      RESPONSE=$(cat "$_TEMP_OUT")
+
+      if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
+        rm -f "$_TEMP_OUT"
+        trap - INT
+        echo "$RESPONSE"
+        return 0
+      fi
+
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "⚠️  Warning: AI call timed out [$MODEL_LABEL] (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+      else
+        echo "⚠️  Warning: AI call failed [$MODEL_LABEL] exit code $EXIT_CODE (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+      fi
+
+      ATTEMPT=$((ATTEMPT + 1))
+
+      if [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; then
+        sleep $((2 ** (ATTEMPT - 1)))
+      fi
+    done
+
+    # If there's a next model to try, log the fallback
+    if [ $_CANCELLED -eq 0 ] && [ "$CURRENT_MODEL" != "${MODELS_TO_TRY[-1]}" ]; then
+      echo "🔄 Switching to fallback model..." >&2
     fi
   done
 
@@ -119,7 +148,7 @@ generative_ia() {
     return 130
   fi
 
-  echo "❌ Error: AI call failed after $MAX_RETRIES attempts" >&2
+  echo "❌ Error: AI call failed after exhausting all models" >&2
   return 1
 }
 
