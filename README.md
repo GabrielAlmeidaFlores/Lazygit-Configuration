@@ -9,7 +9,8 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
 - **AI-Powered Commit Messages** - Generate professional, conventional commit messages with gitmoji
 - **AI-Powered Branch Names** - Generate descriptive branch names with automatic emoji prefixes
 - **AI Thinking Output** - See the AI reasoning process in real-time as it generates results
-- **Configurable AI Model** - Easily switch between GPT, Claude, and Gemini models via `config.env`
+- **Multi-Provider AI** - Switch between Cursor Agent and GitHub Copilot via `config.env`
+- **Configurable AI Model** - Easily switch between models via `config.env`
 
 ### User Experience
 
@@ -27,20 +28,51 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
 ## Prerequisites
 
 - [LazyGit](https://github.com/jesseduffield/lazygit) - Terminal UI for git
+- [git-delta](https://github.com/dandavison/delta) - Syntax-highlighting pager for diffs (required by `config.yml`)
 - Git - Version control system
 - Bash - Shell scripting
 - Text editor - nano, vim, or your preferred editor
 
+### Install git-delta
+
+This configuration uses `delta` as the git pager in `config.yml` to render syntax-highlighted diffs inside LazyGit. Install it before using the config:
+
+| Platform | Command |
+| -------- | ------- |
+| macOS | `brew install git-delta` |
+| Fedora | `sudo dnf install git-delta` |
+| Debian / Ubuntu | `sudo apt install git-delta` |
+| Windows (Winget) | `winget install dandavison.delta` |
+| Windows (Scoop) | `scoop install delta` |
+
+> The package is usually named `git-delta`, but the executable is `delta`. On older Debian/Ubuntu releases where `git-delta` is unavailable in apt, download a `.deb` from the [delta releases page](https://github.com/dandavison/delta/releases).
+
 ### Optional (for AI features)
 
-- [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) - AI provider (or use alternative)
+- [Cursor Agent CLI](https://cursor.com/docs/cli) - Default AI provider (`agent` command)
+- [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) - Alternative AI provider
 
 ## Installation
 
 1. Clone or copy this configuration to your LazyGit config directory:
 
+   **Linux:**
+
    ```bash
    ~/.config/lazygit/
+   ```
+
+   **macOS** (LazyGit default):
+
+   ```bash
+   ~/Library/Application Support/lazygit/
+   ```
+
+   On macOS, custom commands in `config.yml` reference `~/.config/lazygit/`. Create a symlink so those paths resolve:
+
+   ```bash
+   mkdir -p ~/.config
+   ln -sfn "$HOME/Library/Application Support/lazygit" ~/.config/lazygit
    ```
 
 2. Make scripts executable:
@@ -48,16 +80,25 @@ A powerful LazyGit configuration with automated workflows, intelligent tooling, 
    ```bash
    chmod +x ~/.config/lazygit/commands/*.sh
    chmod +x ~/.config/lazygit/commands/gateways/*.sh
+   chmod +x ~/.config/lazygit/commands/gateways/adapters/*.sh
    ```
 
-3. **(Optional)** For AI features, install and authenticate GitHub Copilot CLI:
+3. **(Optional)** For AI features, install and authenticate your chosen provider:
+
+   **Cursor Agent (default):**
+
+   ```bash
+   agent login
+   ```
+
+   **GitHub Copilot:**
 
    ```bash
    npm install -g @github/copilot
    copilot auth
    ```
 
-   Or configure a different AI provider in `commands/gateways/generative-ia.sh`
+   Set `AI_PROVIDER` in `config.env` to switch between providers.
 
 ## Quick Start
 
@@ -120,10 +161,13 @@ Example: `🐛fix/auth-token-validation`
 ~/.config/lazygit/
 ├── commands/
 │   ├── gateways/
-│   │   └── generative-ia.sh      # AI service gateway (modular)
+│   │   ├── generative-ia.sh      # AI gateway router
+│   │   └── adapters/
+│   │       ├── cursor.sh         # Cursor Agent adapter
+│   │       └── copilot.sh        # GitHub Copilot adapter
 │   ├── gen_commit_with_ia.sh     # Commit message generator
 │   └── gen_branch_with_ia.sh     # Branch name generator
-├── config.env                    # AI configuration (model, retries, timeout)
+├── config.env                    # AI configuration (provider, model, retries)
 ├── config.yml                    # LazyGit configuration & theme
 └── README.md                     # Documentation
 ```
@@ -154,24 +198,44 @@ Example: `🐛fix/auth-token-validation`
 
 ## Configuration
 
-### AI Model & Behavior
+### AI Providers
 
-All AI settings are configured in `config.env` at the project root:
+All AI settings are configured in `config.env` at the project root. Switch providers by changing `AI_PROVIDER`:
 
 ```bash
 # config.env
-MODEL="gpt-4.1"   # Change model here
+AI_PROVIDER="cursor"   # cursor | copilot
+MODEL=""               # Leave empty for provider default
 MAX_RETRIES=2
-TIMEOUT=30
+TIMEOUT=60
 ```
 
-Available models:
+| Variable | Applies to | Description |
+| -------- | ---------- | ----------- |
+| `AI_PROVIDER` | All | Active provider: `cursor` or `copilot` |
+| `MODEL` | All | Primary model (empty = provider default) |
+| `FALLBACK_MODEL` | All | Fallback model if primary fails |
+| `MAX_RETRIES` | All | Retry attempts per model |
+| `TIMEOUT` | All | Request timeout in seconds |
+| `CURSOR_BIN` | Cursor | Path to `agent` binary (empty = auto-detect) |
+| `CURSOR_MODE` | Cursor | Agent mode: `ask` (default) or `plan` |
+| `COPILOT_BIN` | Copilot | Path to `copilot` binary (empty = auto-detect) |
 
-| Provider | Models |
-| -------- | ------ |
-| GPT      | `gpt-4.1`, `gpt-5-mini`, `gpt-5.1`, `gpt-5.1-codex`, `gpt-5.1-codex-mini`, `gpt-5.2`, `gpt-5.3-codex` |
-| Claude   | `claude-haiku-4.5`, `claude-sonnet-4.5`, `claude-sonnet-4.6`, `claude-opus-4.5`, `claude-opus-4.6` |
-| Gemini   | `gemini-3-pro-preview` |
+**Cursor Agent** uses `agent -p --trust --mode=ask` for read-only text generation (no file edits).
+
+**GitHub Copilot** uses `copilot -p --silent` for headless responses.
+
+To switch back to Copilot:
+
+```bash
+AI_PROVIDER="copilot"
+```
+
+List available Cursor models:
+
+```bash
+agent models
+```
 
 ### Adding Custom Commands
 
@@ -219,17 +283,13 @@ The modular architecture makes it easy to add new commands:
 
 ### Using Different AI Providers
 
-Edit `commands/gateways/generative-ia.sh` to use any AI service:
+Switch providers in `config.env`:
 
 ```bash
-# Example: Switch to OpenAI CLI
-COPILOT_BIN="/usr/local/bin/openai"
-
-# Or use a different service entirely
-AI_SERVICE_BIN="/path/to/your/ai/cli"
+AI_PROVIDER="cursor"   # or "copilot"
 ```
 
-You can also create additional gateways for different services.
+To add a new provider, create an adapter in `commands/gateways/adapters/` and register it in `generative-ia.sh`.
 
 ### Customizing Prompts
 
@@ -252,9 +312,10 @@ PROMPT="Your custom instructions here..."
 Modify settings in `config.env` at the project root:
 
 ```bash
-MODEL="gpt-4.1"  # AI model to use
-MAX_RETRIES=2    # Number of retry attempts
-TIMEOUT=30       # Request timeout in seconds
+AI_PROVIDER="cursor"  # Active provider
+MODEL=""              # AI model (empty = default)
+MAX_RETRIES=2         # Number of retry attempts
+TIMEOUT=60            # Request timeout in seconds
 ```
 
 ## Troubleshooting
@@ -263,8 +324,9 @@ TIMEOUT=30       # Request timeout in seconds
 
 **AI features not working**
 
-- Verify your AI provider is installed and authenticated
-- Check the binary path in `commands/gateways/generative-ia.sh`
+- Verify your AI provider is installed and authenticated (`agent login` or `copilot auth`)
+- Check `AI_PROVIDER` in `config.env` matches your installed provider
+- Check binary paths: `CURSOR_BIN` or `COPILOT_BIN` in `config.env`
 - Check your model setting in `config.env`
 - Test directly: `./commands/gateways/generative-ia.sh "test prompt"`
 

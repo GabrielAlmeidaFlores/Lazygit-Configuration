@@ -1,0 +1,28 @@
+#!/bin/bash
+# Shared helpers for AI provider adapters
+
+_run_with_timeout() {
+  local DURATION=$1
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$DURATION" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$DURATION" "$@"
+  else
+    "$@" &
+    local PID=$!
+    ( sleep "$DURATION" && kill "$PID" 2>/dev/null ) &
+    local WATCHER=$!
+    wait "$PID" 2>/dev/null
+    local EXIT_CODE=$?
+    kill "$WATCHER" 2>/dev/null
+    wait "$WATCHER" 2>/dev/null
+    if kill -0 "$PID" 2>/dev/null; then
+      kill "$PID" 2>/dev/null
+      wait "$PID" 2>/dev/null
+      return 124
+    fi
+    return $EXIT_CODE
+  fi
+}
