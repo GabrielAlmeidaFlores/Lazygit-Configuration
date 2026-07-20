@@ -107,12 +107,14 @@ generative_ia() {
         "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
       fi
       _AI_PID=$!
-      ( sleep "$TIMEOUT" && kill "$_AI_PID" 2>/dev/null ) &
+
+      (sleep "$TIMEOUT" && kill "$_AI_PID" 2>/dev/null) &
       local _WATCHER_PID=$!
       wait "$_AI_PID"
       local EXIT_CODE=$?
       kill "$_WATCHER_PID" 2>/dev/null
       wait "$_WATCHER_PID" 2>/dev/null
+
       if [ $EXIT_CODE -eq 143 ] || [ $EXIT_CODE -eq 137 ]; then
         EXIT_CODE=124
       fi
@@ -143,7 +145,178 @@ generative_ia() {
       fi
     done
 
-    if [ $_CANCELLED -eq 0 ] && [ "$CURRENT_MODEL" != "${MODELS_TO_TRY[${#MODELS_TO_TRY[@]}-1]}" ]; then
+    if [ $_CANCELLED -eq 0 ] && [ "$CURRENT_MODEL" != "${MODELS_TO_TRY[${#MODELS_TO_TRY[@]} - 1]}" ]; then
+      echo "🔄 Switching to fallback model..." >&2
+    fi
+  done
+
+  rm -f "$_TEMP_OUT"
+  trap - INT
+
+  if [ $_CANCELLED -eq 1 ]; then
+    return 130
+  fi
+
+  echo "❌ Error: AI call failed after exhausting all models" >&2
+  return 1
+}
+
+if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
+  if [ $# -eq 0 ]; then
+    echo "Usage: $0 \"Your prompt here\" [verbose]" >&2
+    echo "   or: source $0 && generative_ia \"Your prompt here\" [1]" >&2
+    exit 1
+  fi
+
+  generative_ia "$1" "${2:-0}"
+fi#!/bin/bash
+# Gateway for interacting with AI/LLM services
+# Currently configured to use GitHub Copilot CLI
+#
+# Configuration (via commands/config.env):
+#   MODEL            - Primary AI model (empty = Copilot default)
+#   FALLBACK_MODEL   - Fallback model if primary fails (empty = no fallback)
+#   MAX_RETRIES      - Number of retry attempts per model (default: 2)
+#   TIMEOUT          - Request timeout in seconds (default: 30)
+#
+# Function: generative_ia(prompt, [verbose])
+#   Sends a prompt to the AI service and returns the response
+#   Parameters:
+#     prompt   (string)  - The text prompt to send to the AI
+#     verbose  (0|1)     - When 1, prints AI thinking/progress to stderr
+#   Returns:
+#     Success (0) - Outputs the AI response to stdout
+#     Failure (1) - Outputs error message to stderr
+#   Behavior:
+#     - Validates that a prompt is provided
+#     - Checks if the Copilot binary exists and is executable
+#     - Attempts the AI call up to MAX_RETRIES times
+#     - Uses exponential backoff between retries (2^(attempt-1) seconds)
+#     - Handles timeout errors (exit code 124)
+#     - Returns error after all retries are exhausted
+#
+# Usage:
+#   As a sourced function:
+#     source /path/to/generative-ia.sh
+#     response=$(generative_ia "Your prompt here")
+#     response=$(generative_ia "Your prompt here" 1)   # with verbose/thinking output
+#   As a standalone script:
+#     ./generative-ia.sh "Your prompt here"
+#     ./generative-ia.sh "Your prompt here" 1          # with verbose/thinking output
+
+# Ensure Homebrew bin is in PATH (needed when launched from GUI apps like lazygit)
+export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+COPILOT_BIN="$(which copilot)"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/../../config.env"
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+else
+  echo "⚠️  Warning: config.env not found at $CONFIG_FILE, using defaults" >&2
+  MAX_RETRIES=2
+  TIMEOUT=30
+fi
+
+generative_ia() {
+  local PROMPT="$1"
+  local VERBOSE="${2:-0}"
+  local _AI_PID="" _CANCELLED=0 _TEMP_OUT
+
+  if [ -z "$PROMPT" ]; then
+    echo "❌ Error: No prompt provided to generative_ia" >&2
+    return 1
+  fi
+
+  if [ ! -x "$COPILOT_BIN" ]; then
+    echo "❌ Error: Copilot binary not found or not executable at $COPILOT_BIN" >&2
+    return 1
+  fi
+
+  _TEMP_OUT=$(mktemp)
+
+  _ai_cancel() {
+    _CANCELLED=1
+    [ -n "$_AI_PID" ] && kill "$_AI_PID" 2>/dev/null && wait "$_AI_PID" 2>/dev/null
+    rm -f "$_TEMP_OUT"
+    echo "" >&2
+    echo "🚫 AI request cancelled." >&2
+  }
+  trap '_ai_cancel' INT
+
+  local MODELS_TO_TRY=()
+  if [ -n "$MODEL" ]; then
+    MODELS_TO_TRY+=("$MODEL")
+  else
+    MODELS_TO_TRY+=("")
+  fi
+  if [ -n "$FALLBACK_MODEL" ] && [ "$FALLBACK_MODEL" != "$MODEL" ]; then
+    MODELS_TO_TRY+=("$FALLBACK_MODEL")
+  fi
+
+  for CURRENT_MODEL in "${MODELS_TO_TRY[@]}"; do
+    [ $_CANCELLED -eq 1 ] && break
+
+    local MODEL_ARGS=()
+    local MODEL_LABEL="default"
+    if [ -n "$CURRENT_MODEL" ]; then
+      MODEL_ARGS=(--model "$CURRENT_MODEL")
+      MODEL_LABEL="$CURRENT_MODEL"
+    fi
+
+    if [ "$VERBOSE" = "1" ]; then
+      echo "🧠 AI thinking ($MODEL_LABEL)... (Ctrl+C to cancel)" >&2
+    fi
+
+    local ATTEMPT=1
+
+    while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
+      if [ "$VERBOSE" = "1" ]; then
+        "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      else
+        "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      fi
+      _AI_PID=$!
+
+      (sleep "$TIMEOUT" && kill "$_AI_PID" 2>/dev/null) &
+      local _WATCHER_PID=$!
+      wait "$_AI_PID"
+      local EXIT_CODE=$?
+      kill "$_WATCHER_PID" 2>/dev/null
+      wait "$_WATCHER_PID" 2>/dev/null
+
+      if [ $EXIT_CODE -eq 143 ] || [ $EXIT_CODE -eq 137 ]; then
+        EXIT_CODE=124
+      fi
+      _AI_PID=""
+
+      [ $_CANCELLED -eq 1 ] && break
+
+      local RESPONSE
+      RESPONSE=$(cat "$_TEMP_OUT")
+
+      if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
+        rm -f "$_TEMP_OUT"
+        trap - INT
+        echo "$RESPONSE"
+        return 0
+      fi
+
+      if [ $EXIT_CODE -eq 124 ]; then
+        echo "⚠️  Warning: AI call timed out [$MODEL_LABEL] (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+      else
+        echo "⚠️  Warning: AI call failed [$MODEL_LABEL] exit code $EXIT_CODE (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+      fi
+
+      ATTEMPT=$((ATTEMPT + 1))
+
+      if [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; then
+        sleep $((2 ** (ATTEMPT - 1)))
+      fi
+    done
+
+    if [ $_CANCELLED -eq 0 ] && [ "$CURRENT_MODEL" != "${MODELS_TO_TRY[${#MODELS_TO_TRY[@]} - 1]}" ]; then
       echo "🔄 Switching to fallback model..." >&2
     fi
   done
