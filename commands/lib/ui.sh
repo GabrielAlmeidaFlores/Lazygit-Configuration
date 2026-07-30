@@ -254,6 +254,7 @@ ui_prompt_proceed() {
   local ANS
   printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
   read -r ANS </dev/tty
+  printf "\033[1A\033[2K" >/dev/tty
   case "$ANS" in
     [eE]) UI_ACTION="edit"    ;;
     "")   UI_ACTION="proceed" ;;
@@ -268,6 +269,7 @@ ui_prompt_post() {
   local ANS
   printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
+  printf "\033[1A\033[2K" >/dev/tty
   case "$ANS" in
     [yY]) UI_ACTION="post" ;;
     [eE]) UI_ACTION="edit" ;;
@@ -344,6 +346,7 @@ ui_prompt_triage() {
   local ANS
   printf "\n  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
+  printf "\033[1A\033[2K" >/dev/tty
   case "$ANS" in
     [gG]) UI_ACTION="generate" ;;
     [qQ]) UI_ACTION="quit"     ;;
@@ -359,6 +362,7 @@ ui_prompt_review() {
   local ANS
   printf "\n  ${_CD}[y]${_C0} post   ${_CD}[e]${_C0} edit   ${_CD}[n]${_C0} skip   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
+  printf "\033[1A\033[2K" >/dev/tty
   case "$ANS" in
     [yY]) UI_ACTION="post" ;;
     [eE]) UI_ACTION="edit" ;;
