@@ -228,10 +228,10 @@ ANALYSES_ORDER=()
 # config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
-    "Architecture")  echo "${PROMPT_INSTRUCTIONS_ARQUITETURA:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
-    "Security")      echo "${PROMPT_INSTRUCTIONS_SEGURANCA:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
-    "Code Quality")  echo "${PROMPT_INSTRUCTIONS_QUALIDADE:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
-    "Test Coverage") echo "${PROMPT_INSTRUCTIONS_TESTES:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
+    "Architecture")  echo "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
+    "Security")      echo "${PROMPT_INSTRUCTIONS_SECURITY:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
+    "Code Quality")  echo "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
+    "Test Coverage") echo "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
     "Performance")   echo "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
   esac
 }
