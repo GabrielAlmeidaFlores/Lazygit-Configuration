@@ -1,263 +1,274 @@
 # LazyGit Enhanced Configuration
 
-A powerful LazyGit configuration with automated workflows, intelligent tooling, and beautiful theme integration.
+A powerful LazyGit configuration with automated workflows, AI-powered code review, and beautiful theme integration.
 
 ## Features
 
 ### Automation & Intelligence
 
-- **AI-Powered Commit Messages** - Generate professional, conventional commit messages with gitmoji
-- **AI-Powered Branch Names** - Generate descriptive branch names with automatic emoji prefixes
-- **AI Thinking Output** - See the AI reasoning process in real-time as it generates results
-- **Multi-Provider AI** - Switch between Cursor Agent and GitHub Copilot via `config.env`
-- **Configurable AI Model** - Easily switch between models via `config.env`
+- **AI PR Review** — Three-pass analysis for architecture, security, code quality, test coverage and performance. Posts inline comments directly on GitHub at the exact line of code.
+- **AI-Powered Commit Messages** — Generate professional, conventional commit messages from staged changes.
+- **AI-Powered Branch Names** — Generate descriptive, kebab-case branch names from staged changes.
+- **Multi-Provider AI** — Switch between Cursor Agent and GitHub Copilot via `config.env`.
+- **Configurable AI Model** — Select the model interactively at runtime or set a default in `config.env`.
+
+### Code Review Quality
+
+- **3-Pass Analysis** — Each analysis type runs three sequential AI passes: initial analysis, second pass informed by the first, and a final validation pass that filters false positives.
+- **Inline Comments** — PR comments are posted directly on the relevant line of code via the GitHub API, not as general PR comments.
+- **Per-repo Authentication** — Automatically uses the correct GitHub account based on local git config or embedded remote credentials.
 
 ### User Experience
 
-- **Human-in-the-Loop** - Review and edit all suggestions before applying
-- **Interactive Editing** - Integrated editor support (nano, vim, etc.)
-- **Optional Context Input** - Provide additional context to the AI for better results
-- **English Standardization** - Consistent English-only output for international teams
+- **Human-in-the-Loop** — Review and edit all suggestions before applying.
+- **Interactive Editing** — Integrated editor support (nano, vim, etc.).
+- **Optional Context Input** — Provide additional context to the AI for better results.
+- **Box-drawing UI** — Consistent terminal interface with borders, color coding, and structured output.
 
 ### Customization
 
-- **Dracula Theme** - Complete color scheme integration
-- **Modular Architecture** - Easy to extend and customize
-- **Gateway Pattern** - Swap AI providers or add new integrations effortlessly
+- **Dracula Theme** — Complete color scheme integration.
+- **Modular Architecture** — Easy to extend and customize.
+- **Gateway Pattern** — Swap AI providers or add new integrations effortlessly.
+- **Config-driven Prompts** — All 7 AI prompt templates live in `config.env`. No script editing needed.
+
+---
 
 ## Prerequisites
 
-- [LazyGit](https://github.com/jesseduffield/lazygit) - Terminal UI for git
-- [git-delta](https://github.com/dandavison/delta) - Syntax-highlighting pager for diffs (required by `config.yml`)
-- Git - Version control system
-- Bash - Shell scripting
-- Text editor - nano, vim, or your preferred editor
+### Required
 
-### Install git-delta
+| Dependency | Purpose | Install |
+|---|---|---|
+| [LazyGit](https://github.com/jesseduffield/lazygit) | Terminal UI for git | `brew install lazygit` |
+| [git-delta](https://github.com/dandavison/delta) | Syntax-highlighted diffs | `brew install git-delta` |
+| [fzf](https://github.com/junegunn/fzf) | Interactive fuzzy selection menus | `brew install fzf` |
+| [gh](https://cli.github.com/) | GitHub CLI (PR list, diff, inline comments) | `brew install gh` |
+| [jq](https://jqlang.github.io/jq/) | JSON parsing for PR data | `brew install jq` |
+| Git | Version control | pre-installed on macOS |
+| Bash | Shell scripting | pre-installed on macOS |
 
-This configuration uses `delta` as the git pager in `config.yml` to render syntax-highlighted diffs inside LazyGit. Install it before using the config:
+### Install all at once (macOS)
 
-| Platform | Command |
-| -------- | ------- |
-| macOS | `brew install git-delta` |
-| Fedora | `sudo dnf install git-delta` |
-| Debian / Ubuntu | `sudo apt install git-delta` |
-| Windows (Winget) | `winget install dandavison.delta` |
-| Windows (Scoop) | `scoop install delta` |
+```bash
+brew install lazygit git-delta fzf gh jq
+```
 
-> The package is usually named `git-delta`, but the executable is `delta`. On older Debian/Ubuntu releases where `git-delta` is unavailable in apt, download a `.deb` from the [delta releases page](https://github.com/dandavison/delta/releases).
+After installing `gh`, authenticate:
+
+```bash
+gh auth login
+```
 
 ### Optional (for AI features)
 
-- [Cursor Agent CLI](https://cursor.com/docs/cli) - Default AI provider (`agent` command)
-- [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) - Alternative AI provider
+- [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) — Default AI provider (`copilot` command)
+- [Cursor Agent CLI](https://cursor.com/docs/cli) — Alternative AI provider (`agent` command)
+
+---
 
 ## Installation
 
-1. Clone or copy this configuration to your LazyGit config directory:
+### 1. Clone the repository
 
-   **Linux:**
+```bash
+git clone <this-repo> ~/Documents/Lazygit-Configuration
+```
 
-   ```bash
-   ~/.config/lazygit/
-   ```
+### 2. Create symbolic links
 
-   **macOS** (LazyGit default):
+```bash
+ln -sf ~/Documents/Lazygit-Configuration/config.yml ~/.config/lazygit/config.yml
+ln -sf ~/Documents/Lazygit-Configuration/commands ~/.config/lazygit/commands
+ln -sf ~/Documents/Lazygit-Configuration/config.env ~/.config/lazygit/config.env
+```
 
-   ```bash
-   ~/Library/Application Support/lazygit/
-   ```
+### 3. Make scripts executable
 
-   On macOS, custom commands in `config.yml` reference `~/.config/lazygit/`. Create a symlink so those paths resolve:
+```bash
+chmod +x ~/.config/lazygit/commands/*.sh
+chmod +x ~/.config/lazygit/commands/gateways/*.sh
+chmod +x ~/.config/lazygit/commands/gateways/adapters/*.sh
+```
 
-   ```bash
-   mkdir -p ~/.config
-   ln -sfn "$HOME/Library/Application Support/lazygit" ~/.config/lazygit
-   ```
+### 4. Add the `pr-review` terminal command
 
-2. Make scripts executable:
+```bash
+echo 'alias pr-review="bash ~/.config/lazygit/commands/review_pr.sh"' >> ~/.zshrc
+source ~/.zshrc
+```
 
-   ```bash
-   chmod +x ~/.config/lazygit/commands/*.sh
-   chmod +x ~/.config/lazygit/commands/gateways/*.sh
-   chmod +x ~/.config/lazygit/commands/gateways/adapters/*.sh
-   ```
+### 5. Install and authenticate your AI provider
 
-3. **(Optional)** For AI features, install and authenticate your chosen provider:
+**GitHub Copilot (default):**
 
-   **Cursor Agent (default):**
+```bash
+npm install -g @github/copilot
+copilot auth
+```
 
-   ```bash
-   agent login
-   ```
+**Cursor Agent:**
 
-   **GitHub Copilot:**
+```bash
+agent login
+```
 
-   ```bash
-   npm install -g @github/copilot
-   copilot auth
-   ```
+Set `AI_PROVIDER` in `config.env` to switch between providers.
 
-   Set `AI_PROVIDER` in `config.env` to switch between providers.
+---
 
 ## Quick Start
 
-### Using Custom Commands
+### LazyGit keybindings
 
-The configuration provides keyboard shortcuts for common workflows:
+| Key | Context | Action |
+|---|---|---|
+| `Ctrl+A` | Global | AI PR Review |
+| `C` | Files | Generate AI commit message |
+| `B` | Files | Generate AI branch name |
 
-| Key | Context | Action                  |
-| --- | ------- | ----------------------- |
-| `C` | Files   | Generate commit message |
-| `B` | Files   | Generate branch name    |
+### Terminal command
 
-Simply stage your changes and press the corresponding key!
-
-## Standards & Conventions
-
-### Commit Message Format
-
-```
-<gitmoji> <type>(<scope>): <summary>
-
-- <Detailed Bullet Points>
+```bash
+cd your-repo
+pr-review
 ```
 
-### Type Mapping
-
-| Type     | Emoji | Description               |
-| -------- | ----- | ------------------------- |
-| feat     | ✨    | New logic/functionality   |
-| fix      | 🐛    | Bug fixes                 |
-| refactor | ♻️    | Code refactoring/cleaning |
-| chore    | 🔧    | Build/Config/CI/Docker    |
-| docs     | 📝    | Documentation/Comments    |
-| style    | 💄    | CSS/Styling/UI            |
-
-## Branch Name Format
-
-```
-<emoji><type>/<descriptive-name>
-```
-
-Example: `🐛fix/auth-token-validation`
-
-### Branch Prefix Mapping
-
-| Prefix    | Emoji | Description                     |
-| --------- | ----- | ------------------------------- |
-| fix/      | 🐛    | Bug fixes and corrections       |
-| feat/     | ✨    | New features and modules        |
-| chore/    | 🔨    | Config, deps, docker, CI, build |
-| refactor/ | ♻️    | Code structure changes          |
-| docs/     | 📝    | Documentation and markdown      |
-| style/    | 💄    | CSS/Styling/UI changes          |
-| test/     | ✅    | Test additions/modifications    |
-| perf/     | ⚡    | Performance improvements        |
-
-## File Structure
-
-```
-~/.config/lazygit/
-├── commands/
-│   ├── gateways/
-│   │   ├── generative-ia.sh      # AI gateway router
-│   │   └── adapters/
-│   │       ├── cursor.sh         # Cursor Agent adapter
-│   │       └── copilot.sh        # GitHub Copilot adapter
-│   ├── gen_commit_with_ia.sh     # Commit message generator
-│   └── gen_branch_with_ia.sh     # Branch name generator
-├── config.env                    # AI configuration (provider, model, retries)
-├── config.yml                    # LazyGit configuration & theme
-└── README.md                     # Documentation
-```
+---
 
 ## Available Commands
 
-### AI-Powered Workflows
+### AI PR Review (`Ctrl+A` or `pr-review`)
 
-#### Generate Commit Message (`C`)
+Interactive multi-step workflow to analyze open PRs and post inline comments on GitHub.
+
+**Flow:**
+
+1. **Select PR** — lists all open PRs via `fzf`
+2. **Select AI model** — choose from provider-specific models or use the default from `config.env`
+3. **Select analyses** — pick one or more (Tab to multi-select):
+   - `Architecture` — separation of concerns, coupling, SOLID violations
+   - `Security` — exposed secrets, injection risks, unsanitized inputs
+   - `Code Quality` — duplication, complexity, poor naming, missing error handling
+   - `Test Coverage` — missing tests, edge cases, untested critical logic
+   - `Performance` — N+1 queries, inefficient loops, blocking operations
+   - `All` — runs all five sequentially
+4. **Fetch PR data** — pulls title, description, author, and diff via `gh`
+5. **3-pass AI analysis** — for each selected analysis type:
+   - Pass 1: initial analysis of the diff
+   - Pass 2: second independent analysis informed by Pass 1 findings
+   - Pass 3: validates the deduplicated combined issues against the diff and filters false positives
+6. **Summary** — shows pass/fail status per analysis and a full checklist of confirmed issues
+7. **Issue-by-issue review** — for each confirmed issue:
+   - View the full issue description and relevant code snippet from the diff
+   - Choose: `[g]` generate comment, `[n]` ignore, `[q]` quit
+   - If generating: AI writes a natural, human-like comment
+   - Choose: `[y]` post, `[e]` edit, `[n]` skip, `[q]` quit
+   - Comment is posted as an **inline review comment** on the exact line in the PR
+
+**Comment style:** direct and natural, no markdown headers, no formal openers, correct grammar in the chosen language (PT, EN, or ES).
+
+### Generate Commit Message (`C`)
 
 1. Stage your changes in LazyGit
 2. Press `C` in the files view
-3. **(Optional)** Provide additional context to help the AI understand your changes
-   - Press `[Enter]` to skip if no context is needed
-   - Example context: "Refactoring for better performance" or "Part of authentication redesign"
-4. Review the generated message
-5. Press `[Enter]` to commit or `[e]` to edit
+3. Optionally provide context (Enter to skip)
+4. Review the AI-generated message in a bordered preview box
+5. `[Enter]` to commit, `[e]` to edit in your `$EDITOR`, `[Ctrl+C]` to cancel
 
-#### Generate Branch Name (`B`)
+### Generate Branch Name (`B`)
 
 1. Stage your changes in LazyGit
 2. Press `B` in the files view
-3. **(Optional)** Provide additional context to help the AI categorize your changes
-   - Press `[Enter]` to skip if no context is needed
-   - Example context: "Working on user authentication" or "Fixing payment bug"
-4. Review the generated name with emoji
-5. Press `[Enter]` to create branch or `[e]` to edit
+3. Optionally provide context (Enter to skip)
+4. Review the AI-generated branch name
+5. `[Enter]` to create the branch, `[e]` to edit, `[Ctrl+C]` to cancel
+
+---
 
 ## Configuration
 
-### AI Providers
+All configuration lives in `config.env`.
 
-All AI settings are configured in `config.env` at the project root. Switch providers by changing `AI_PROVIDER`:
+### AI Provider & Model
 
 ```bash
-# config.env
-AI_PROVIDER="cursor"   # cursor | copilot
-MODEL=""               # Leave empty for provider default
+AI_PROVIDER="copilot"   # copilot | cursor
+MODEL=""                # Leave empty for provider default
+FALLBACK_MODEL=""       # Fallback model if primary fails
 MAX_RETRIES=2
 TIMEOUT=60
 ```
 
 | Variable | Applies to | Description |
-| -------- | ---------- | ----------- |
-| `AI_PROVIDER` | All | Active provider: `cursor` or `copilot` |
+|---|---|---|
+| `AI_PROVIDER` | All | Active provider: `copilot` or `cursor` |
 | `MODEL` | All | Primary model (empty = provider default) |
-| `FALLBACK_MODEL` | All | Fallback model if primary fails |
+| `FALLBACK_MODEL` | All | Fallback if primary fails |
 | `MAX_RETRIES` | All | Retry attempts per model |
 | `TIMEOUT` | All | Request timeout in seconds |
 | `CURSOR_BIN` | Cursor | Path to `agent` binary (empty = auto-detect) |
-| `CURSOR_MODE` | Cursor | Agent mode: `ask` (default) or `plan` |
+| `CURSOR_MODE` | Cursor | Agent mode: `ask` or `plan` |
 | `COPILOT_BIN` | Copilot | Path to `copilot` binary (empty = auto-detect) |
 
-**Cursor Agent** uses `agent -p --trust --mode=ask` for read-only text generation (no file edits).
+### Model Selection
 
-**GitHub Copilot** uses `copilot -p --silent` for headless responses.
-
-To switch back to Copilot:
+Customize which models appear in the interactive selector:
 
 ```bash
-AI_PROVIDER="copilot"
+# Comma-separated. Leave empty to use built-in defaults.
+CURSOR_MODELS="claude-sonnet-4-5,claude-opus-4,gpt-4o,o3"
+COPILOT_MODELS="claude-sonnet-4.6,claude-sonnet-4.5,gpt-5.3-codex"
 ```
 
-List available Cursor models:
+**Copilot built-in defaults:** `claude-sonnet-4.6, claude-sonnet-4.5, claude-opus-4.6, gpt-5.3-codex, gemini-3.1-pro-preview`
+
+**Cursor built-in defaults:** `claude-sonnet-4-5, claude-opus-4, gpt-4o, gpt-4.1, o3, gemini-2.5-pro`
+
+### Prompt Templates
+
+All 7 AI prompt templates are defined in `config.env`. Edit them directly — no script changes needed.
+
+#### Per-analysis instructions
 
 ```bash
-agent models
+PROMPT_INSTRUCTIONS_ARCHITECTURE="Check for: ..."
+PROMPT_INSTRUCTIONS_SECURITY="Check for: ..."
+PROMPT_INSTRUCTIONS_CODE_QUALITY="Check for: ..."
+PROMPT_INSTRUCTIONS_TEST_COVERAGE="Check for: ..."
+PROMPT_INSTRUCTIONS_PERFORMANCE="Check for: ..."
 ```
 
-### Adding Custom Commands
+#### Analysis templates (3-pass system)
 
-Edit `config.yml` to add new commands:
+| Variable | Pass | Purpose |
+|---|---|---|
+| `PROMPT_ANALYSIS_TEMPLATE` | Pass 1 | Initial analysis of the diff |
+| `PROMPT_ANALYSIS_PASS2_TEMPLATE` | Pass 2 | Second analysis informed by Pass 1 findings |
+| `PROMPT_ANALYSIS_PASS3_TEMPLATE` | Pass 3 | Validates combined issues, filters false positives |
 
-```yaml
-customCommands:
-  - key: "C"
-    context: "files"
-    description: "Generate commit message"
-    command: "bash ~/.config/lazygit/commands/gen_commit_with_ia.sh"
-    output: terminal
-  - key: "B"
-    context: "files"
-    description: "Generate branch name"
-    command: "bash ~/.config/lazygit/commands/gen_branch_with_ia.sh"
-    output: terminal
+#### Comment generation template
+
+```bash
+PROMPT_COMMENT_TEMPLATE="..."
 ```
+
+#### Available placeholders
+
+| Placeholder | Available in | Value |
+|---|---|---|
+| `__ANALYSIS_NAME__` | Pass 1, 2, 3 | Analysis type (e.g. `Security`) |
+| `__PR_TITLE__` | All | PR title |
+| `__PR_AUTHOR__` | All | PR author login |
+| `__PR_BODY__` | All | PR description |
+| `__PR_DIFF__` | All | First 400 lines of the PR diff |
+| `__INSTRUCTIONS__` | Pass 1, 2, 3 | Per-analysis instruction text |
+| `__PASS1_RESULT__` | Pass 2 | Structured output from Pass 1 |
+| `__COMBINED_ISSUES__` | Pass 3 | Deduplicated issues from passes 1 and 2 |
+| `__ISSUE__` | Comment | A single confirmed issue |
+| `__COMMENT_LANG__` | Comment | Comment language (e.g. `Brazilian Portuguese`) |
 
 ### Theme Customization
-
-The configuration includes a complete Dracula theme. Modify colors in `config.yml`:
 
 ```yaml
 gui:
@@ -265,163 +276,162 @@ gui:
     activeBorderColor: ["#bd93f9", "bold"]
     stagedChangesColor: ["#50fa7b"]
     unstagedChangesColor: ["#ff5555"]
-    # ... more theme options
 ```
 
-See `config.yml` for complete theme definitions.
+---
 
-## Extending & Customizing
+## File Structure
 
-### Adding New Features
-
-The modular architecture makes it easy to add new commands:
-
-1. Create a new script in the `commands/` directory (e.g., `commands/gen_something.sh`)
-2. Source any gateways you need: `source "$SCRIPT_DIR/gateways/generative-ia.sh"`
-3. Implement your logic
-4. Add a custom command in `config.yml`
-
-### Using Different AI Providers
-
-Switch providers in `config.env`:
-
-```bash
-AI_PROVIDER="cursor"   # or "copilot"
+```
+~/.config/lazygit/
+├── commands/
+│   ├── lib/
+│   │   └── ui.sh                     # Terminal UI library (box-drawing, colors, prompts)
+│   ├── gateways/
+│   │   ├── generative-ia.sh          # AI gateway — routes to active provider
+│   │   └── adapters/
+│   │       ├── _helpers.sh           # Shared timeout utilities
+│   │       ├── cursor.sh             # Cursor Agent adapter
+│   │       └── copilot.sh            # GitHub Copilot adapter
+│   ├── review_pr.sh                  # AI PR Review (pr-review command)
+│   ├── gen_commit_with_ia.sh         # Commit message generator
+│   └── gen_branch_with_ia.sh         # Branch name generator
+├── config.env                        # All configuration: provider, models, 7 prompt templates
+├── config.yml                        # LazyGit config, Dracula theme & keybindings
+└── README.md
 ```
 
-To add a new provider, create an adapter in `commands/gateways/adapters/` and register it in `generative-ia.sh`.
+---
 
-### Customizing Prompts
+## Standards & Conventions
 
-Each generator script has a `PROMPT` variable you can customize:
+### Commit Message Format
 
-**For commit messages** - Edit `commands/gen_commit_with_ia.sh`:
+```
+<type>(<scope>): <summary>
 
-```bash
-PROMPT="Your custom instructions here..."
+- <Detailed bullet points>
 ```
 
-**For branch names** - Edit `commands/gen_branch_with_ia.sh`:
+### Type Mapping
 
-```bash
-PROMPT="Your custom instructions here..."
+| Type | Description |
+|---|---|
+| feat | New logic or functionality |
+| fix | Bug fixes |
+| refactor | Code refactoring |
+| chore | Build, config, CI, Docker |
+| docs | Documentation |
+| style | CSS, styling, UI |
+
+### Branch Name Format
+
+```
+<type>/<descriptive-name>
 ```
 
-### Adjusting Behavior
+| Prefix | Description |
+|---|---|
+| fix/ | Bug fixes and corrections |
+| feat/ | New features and modules |
+| chore/ | Config, deps, docker, CI, build |
+| refactor/ | Code structure changes |
+| docs/ | Documentation and markdown |
+| style/ | CSS and UI changes |
+| test/ | Test additions or modifications |
+| perf/ | Performance improvements |
 
-Modify settings in `config.env` at the project root:
-
-```bash
-AI_PROVIDER="cursor"  # Active provider
-MODEL=""              # AI model (empty = default)
-MAX_RETRIES=2         # Number of retry attempts
-TIMEOUT=60            # Request timeout in seconds
-```
+---
 
 ## Troubleshooting
 
-### Common Issues
+### `fzf` not found
 
-**AI features not working**
-
-- Verify your AI provider is installed and authenticated (`agent login` or `copilot auth`)
-- Check `AI_PROVIDER` in `config.env` matches your installed provider
-- Check binary paths: `CURSOR_BIN` or `COPILOT_BIN` in `config.env`
-- Check your model setting in `config.env`
-- Test directly: `./commands/gateways/generative-ia.sh "test prompt"`
-
-**No staged changes error**
-
-- Ensure you have staged changes before running commands
-- Stage files in LazyGit with `[Space]`
-
-**Editor not opening**
-
-- Set your preferred editor: `export EDITOR=nano`
-- Add to `~/.bashrc` or `~/.zshrc` to make permanent
-
-**Permission denied**
-
-- Make scripts executable: `chmod +x ~/.config/lazygit/commands/**/*.sh`
-
-## Examples
-
-### Commit Message Generation
-
-**Scenario:** Staged changes adding JWT authentication
-
-**Generated Output:**
-
-```
-✨ feat(auth): implement JWT token validation
-
-- Add token verification middleware
-- Implement expiration checking logic
-- Add error handling for invalid tokens
+```bash
+brew install fzf        # macOS
+sudo apt install fzf    # Debian/Ubuntu
+sudo dnf install fzf    # Fedora
 ```
 
-**With User Context:**
+### `gh` not found or not authenticated
 
-If you provide context like: `"Part of security enhancement for API endpoints"`
-
-The AI will consider this additional information when generating the commit message, potentially providing more detailed explanations about the security improvements.
-
-### Branch Name Generation
-
-**Scenario:** Staged changes fixing a bug in authentication
-
-**Generated Output:**
-
-```
-🐛fix/auth-token-validation
+```bash
+brew install gh
+gh auth login
 ```
 
-**With User Context:**
+### `jq` not found
 
-If you provide context like: `"Fixing token expiration issue from bug report #123"`
+```bash
+brew install jq         # macOS
+sudo apt install jq     # Debian/Ubuntu
+```
 
-The AI will better understand this is a fix (not a feature) and might suggest a more specific name like: `🐛fix/token-expiration-validation`
+### AI analysis fails with "Call failed exit 1"
 
-## Tips for Using Context
+This usually means the model is rejecting the request. Common causes:
 
-### When to Provide Context
+- **Classic PAT in remote URL** — the Copilot CLI does not accept classic GitHub PATs (`ghp_`). The `_resolve_gh_auth` function now isolates the PAT so it is only used for `gh` API calls, not passed to Copilot.
+- **Invalid model name** — verify the model name is in your `COPILOT_MODELS` list and supported by your Copilot subscription.
+- **Test a model directly:** `copilot --available-tools= --model <model> -p "say: ok"`
 
-- **Complex changes** - When the diff alone might not explain the full picture
-- **Multi-purpose changes** - When changes serve a specific goal not obvious from code
-- **Bug fixes** - Reference issue numbers or describe the problem being solved
-- **Refactoring** - Explain the reason for restructuring (e.g., "performance optimization")
-- **Part of larger feature** - Mention the overall feature being worked on
+### Analysis shows "analysis failed" for all types
 
-### Context Examples
+Most likely cause: the Copilot CLI is running in agent mode and executing shell commands instead of analyzing the code. Ensure the adapter uses `--available-tools=` (already set in `copilot.sh`).
 
-Good context inputs:
-- `"Part of user authentication redesign"`
-- `"Fixing memory leak reported in production"`
-- `"Refactoring for better testability"`
-- `"Implementing requirements from ticket #456"`
-- `"Performance optimization for large datasets"`
+### No open PRs found
 
-Less helpful context:
-- `"Update code"` (too vague)
-- `"Fix bug"` (AI can infer this from the diff)
-- Very long explanations (keep it concise)
+- Confirm you are inside a git repository with a GitHub remote.
+- Check `gh` is authenticated: `gh auth status`
+- List open PRs: `gh pr list`
 
-## Contributing
+### Inline comments fail but general comments work
 
-This configuration is designed to be extended. Feel free to:
+The inline comment API requires `path`, `line`, and `commit_id`. If the file mentioned in the issue is not in the PR diff (e.g., an indirect reference), the script falls back to a general PR comment automatically.
 
-- Add new custom commands
-- Create additional gateways for different services
-- Improve existing scripts
-- Share your enhancements
+### No staged changes (commit/branch commands)
 
-## License
+Stage files in LazyGit with `[Space]` before pressing `C` or `B`.
 
-This configuration is free to use and modify.
+### Permission denied
+
+```bash
+chmod +x ~/.config/lazygit/commands/**/*.sh
+```
+
+### Editor not opening
+
+```bash
+export EDITOR=nano   # or vim, code, etc.
+```
+
+Add to `~/.zshrc` to make it permanent.
+
+---
+
+## Extending & Customizing
+
+### Adding a new command
+
+1. Create a script in `commands/` (e.g. `commands/gen_something.sh`)
+2. Source the libraries: `source "$SCRIPT_DIR/lib/ui.sh"` and `source "$SCRIPT_DIR/gateways/generative-ia.sh"`
+3. Add prompt templates to `config.env`
+4. Use `render_template "$PROMPT_TEMPLATE" "__KEY__" "$value"` to build prompts
+5. Call `generative_ia "$PROMPT"` to invoke the AI
+6. Add a keybinding in `config.yml`
+
+### Adding a new AI provider
+
+1. Create `commands/gateways/adapters/<provider>.sh` with a `_generative_ia_<provider>()` function
+2. Register it in `generative-ia.sh` under the `case "$PROVIDER"` block
+3. Set `AI_PROVIDER="<provider>"` in `config.env`
+
+---
 
 ## Credits
 
-- [LazyGit](https://github.com/jesseduffield/lazygit) - Amazing terminal UI for git
-- [Dracula Theme](https://draculatheme.com/) - Beautiful color scheme
-- [Conventional Commits](https://www.conventionalcommits.org/) - Commit message standard
-- [Gitmoji](https://gitmoji.dev/) - Emoji guide for commit messages
+- [LazyGit](https://github.com/jesseduffield/lazygit) — Terminal UI for git
+- [Dracula Theme](https://draculatheme.com/) — Color scheme
+- [Conventional Commits](https://www.conventionalcommits.org/) — Commit message standard
+- [fzf](https://github.com/junegunn/fzf) — Fuzzy finder
+- [gh](https://cli.github.com/) — GitHub CLI
