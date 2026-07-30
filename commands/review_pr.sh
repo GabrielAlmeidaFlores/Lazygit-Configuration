@@ -11,6 +11,8 @@ export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/loca
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
+clear
+
 # ─── Check dependencies ───────────────────────────────────────────────────────
 for dep in gh fzf jq; do
   if ! command -v "$dep" &>/dev/null; then

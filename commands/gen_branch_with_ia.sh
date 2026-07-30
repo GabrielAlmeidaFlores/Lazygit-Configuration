@@ -3,6 +3,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
+clear
+
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
 if [ -z "$FILES_CHANGED" ]; then
   ui_error "No staged changes found."
