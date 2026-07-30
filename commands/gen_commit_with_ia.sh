@@ -1,24 +1,21 @@
 #!/bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 FILES=$(git diff --cached --name-only | head -n 15 | tr '\n' ', ')
 if [ -z "$FILES" ]; then
-  echo "❌ Error: No changes staged."
+  ui_error "No staged changes found."
   exit 1
 fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
-read -p "📋 Optional Context (Enter to skip): " USER_CONTEXT
-echo ""
+USER_CONTEXT=$(ui_prompt "Optional context (Enter to skip)")
 
 VERBOSE=1
-
 CONTEXT_SECTION=""
-if [ -n "$USER_CONTEXT" ]; then
-  CONTEXT_SECTION="USER PROVIDED CONTEXT: $USER_CONTEXT"
-fi
+[ -n "$USER_CONTEXT" ] && CONTEXT_SECTION="USER PROVIDED CONTEXT: $USER_CONTEXT"
 
 PROMPT="
 Analyze the following DIFF code and follow the instructions below.
@@ -49,35 +46,23 @@ CRITICAL RULES:
 
 RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
 EXIT_CODE=$?
-if [ $EXIT_CODE -eq 130 ]; then
-  exit 0
-fi
-if [ $EXIT_CODE -ne 0 ]; then
-  echo "❌ Error: Failed to get AI response."
-  exit 1
-fi
+[ $EXIT_CODE -eq 130 ] && exit 0
+[ $EXIT_CODE -ne 0 ] && ui_error "Failed to get AI response." && exit 1
 
 TEMP_MSG_FILE=$(mktemp)
+echo "$RAW_MSG" > "$TEMP_MSG_FILE"
 
-echo -e "\n📝 AI Suggested Commit Message:\n"
-echo -e "----------------------------------------"
-echo -e "\033[1;32m$RAW_MSG\033[0m"
-echo -e "----------------------------------------\n"
+ui_content_box "Suggested Commit Message" "$RAW_MSG"
 
-echo "$RAW_MSG" >"$TEMP_MSG_FILE"
+ACTION=$(ui_prompt_proceed "commit")
 
-read -p "Press [Enter] to commit, [e] to edit, or [Ctrl+C] to cancel: " ACTION
-
-if [[ "$ACTION" == "e" ]]; then
-  ${EDITOR:-nano} "$TEMP_MSG_FILE"
-  RAW_MSG=$(cat "$TEMP_MSG_FILE")
-fi
+[ "$ACTION" = "edit" ] && ${EDITOR:-nano} "$TEMP_MSG_FILE" && RAW_MSG=$(cat "$TEMP_MSG_FILE")
 
 if [ -n "$RAW_MSG" ]; then
   git commit -F "$TEMP_MSG_FILE"
-  echo "✅ Committed successfully!"
+  ui_success "Committed successfully."
 else
-  echo "❌ Error: Message is empty. Commit aborted."
+  ui_error "Message is empty. Commit aborted."
 fi
 
-rm "$TEMP_MSG_FILE"
+rm -f "$TEMP_MSG_FILE"

@@ -18,12 +18,12 @@ _generative_ia_copilot() {
   local _AI_PID="" _CANCELLED=0 _TEMP_OUT
 
   if [ -z "$PROMPT" ]; then
-    echo "❌ Error: No prompt provided to generative_ia" >&2
+    ui_error "No prompt provided to generative_ia" >&2
     return 1
   fi
 
   if [ ! -x "$COPILOT_BIN" ]; then
-    echo "❌ Error: Copilot binary not found or not executable at $COPILOT_BIN" >&2
+    ui_error "Copilot binary not found or not executable at $COPILOT_BIN" >&2
     return 1
   fi
 
@@ -34,7 +34,7 @@ _generative_ia_copilot() {
     [ -n "$_AI_PID" ] && kill "$_AI_PID" 2>/dev/null && wait "$_AI_PID" 2>/dev/null
     rm -f "$_TEMP_OUT"
     echo "" >&2
-    echo "🚫 AI request cancelled." >&2
+    ui_cancel >&2
   }
   trap '_ai_cancel' INT
 
@@ -59,7 +59,7 @@ _generative_ia_copilot() {
     fi
 
     if [ "$VERBOSE" = "1" ]; then
-      echo "🧠 AI thinking ($MODEL_LABEL)... (Ctrl+C to cancel)" >&2
+      ui_step "Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
     fi
 
     local ATTEMPT=1
@@ -88,9 +88,9 @@ _generative_ia_copilot() {
       fi
 
       if [ $EXIT_CODE -eq 124 ]; then
-        echo "⚠️  Warning: AI call timed out [$MODEL_LABEL] (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+        ui_warning "Call timed out  [$MODEL_LABEL]  attempt $ATTEMPT/$MAX_RETRIES" >&2
       else
-        echo "⚠️  Warning: AI call failed [$MODEL_LABEL] exit code $EXIT_CODE (attempt $ATTEMPT/$MAX_RETRIES)" >&2
+        ui_warning "Call failed  [$MODEL_LABEL]  exit $EXIT_CODE  attempt $ATTEMPT/$MAX_RETRIES" >&2
       fi
 
       ATTEMPT=$((ATTEMPT + 1))
@@ -102,7 +102,7 @@ _generative_ia_copilot() {
 
     local LAST_MODEL_INDEX=$((${#MODELS_TO_TRY[@]} - 1))
     if [ $_CANCELLED -eq 0 ] && [ "$CURRENT_MODEL" != "${MODELS_TO_TRY[$LAST_MODEL_INDEX]}" ]; then
-      echo "🔄 Switching to fallback model..." >&2
+      ui_step "Switching to fallback model..." >&2
     fi
   done
 
@@ -113,6 +113,6 @@ _generative_ia_copilot() {
     return 130
   fi
 
-  echo "❌ Error: AI call failed after exhausting all models" >&2
+  ui_error "AI call failed after exhausting all models" >&2
   return 1
 }
