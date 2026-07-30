@@ -205,6 +205,7 @@ Security           # Secrets, injection, auth bypasses
 Code Quality       # Duplication, complexity, naming
 Test Coverage      # Missing tests, edge cases
 Performance        # N+1 queries, inefficient loops
+Bugs               # Null dereferences, off-by-one, race conditions, logic errors
 Spelling & Grammar # Typos, missing accents, language detection
 ```
 

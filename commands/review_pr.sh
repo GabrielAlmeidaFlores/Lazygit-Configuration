@@ -144,6 +144,7 @@ Security
 Code Quality
 Test Coverage
 Performance
+Bugs
 Spelling & Grammar
 All" | fzf \
   --multi \
@@ -160,6 +161,7 @@ Security
 Code Quality
 Test Coverage
 Performance
+Bugs
 Spelling & Grammar"
 fi
 
@@ -270,6 +272,7 @@ get_instructions() {
     "Code Quality")         ui_print "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
     "Test Coverage")        ui_print "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
     "Performance")          ui_print "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
+    "Bugs")                 ui_print "${PROMPT_INSTRUCTIONS_BUGS:-Check for potential bugs: null dereferences, off-by-one errors, race conditions, incorrect logic, resource leaks.}" ;;
     "Spelling & Grammar")   ui_print "${PROMPT_INSTRUCTIONS_SPELLING:-Detect language and check for spelling mistakes, typos, missing accents in Portuguese/Spanish, grammatical errors in comments and strings.}" ;;
   esac
 }
