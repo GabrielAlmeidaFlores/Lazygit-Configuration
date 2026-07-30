@@ -154,7 +154,8 @@ Interactive multi-step workflow to analyze open PRs and post inline comments on 
    - `Code Quality` — duplication, complexity, poor naming, missing error handling
    - `Test Coverage` — missing tests, edge cases, untested critical logic
    - `Performance` — N+1 queries, inefficient loops, blocking operations
-   - `All` — runs all five sequentially
+   - `Spelling & Grammar` — typos, missing accents (português), auto language detection
+   - `All` — runs all six in parallel
 4. **Fetch PR data** — pulls title, description, author, and diff via `gh`
 5. **3-pass AI analysis** — for each selected analysis type:
    - Pass 1: initial analysis of the diff
