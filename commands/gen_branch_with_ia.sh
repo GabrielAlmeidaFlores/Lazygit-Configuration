@@ -62,22 +62,32 @@ CLEAN_NAME=$(echo "$RAW_NAME" | grep -oE '(feat|fix|chore|refactor|docs|test|ci|
 
 FINAL_NAME="$CLEAN_NAME"
 
-ui_content_box "Suggested Branch Name" "$FINAL_NAME"
+TEMP_FILE=$(mktemp)
+echo "$FINAL_NAME" > "$TEMP_FILE"
 
-ACTION=$(ui_prompt_proceed "create branch")
-
-if [ "$ACTION" = "edit" ]; then
-  TEMP_FILE=$(mktemp)
-  echo "$FINAL_NAME" > "$TEMP_FILE"
-  ${EDITOR:-nano} "$TEMP_FILE"
+while true; do
   FINAL_NAME=$(cat "$TEMP_FILE")
-  rm -f "$TEMP_FILE"
-fi
+  ui_content_box "Suggested Branch Name" "$FINAL_NAME"
+  ACTION=$(ui_prompt_proceed "create branch")
 
-if [ -n "$FINAL_NAME" ]; then
-  git checkout -b "$FINAL_NAME"
-  ui_success "Switched to: $FINAL_NAME"
-else
-  ui_error "Operation cancelled."
-  exit 1
-fi
+  case "$ACTION" in
+    proceed)
+      if [ -n "$FINAL_NAME" ]; then
+        git checkout -b "$FINAL_NAME"
+        ui_success "Switched to: $FINAL_NAME"
+      else
+        ui_error "Branch name is empty. Aborted."
+      fi
+      break
+      ;;
+    edit)
+      ${EDITOR:-nano} "$TEMP_FILE"
+      ;;
+    *)
+      ui_cancel
+      break
+      ;;
+  esac
+done
+
+rm -f "$TEMP_FILE"

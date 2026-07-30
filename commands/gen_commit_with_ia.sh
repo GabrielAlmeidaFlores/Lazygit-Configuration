@@ -52,17 +52,29 @@ EXIT_CODE=$?
 TEMP_MSG_FILE=$(mktemp)
 echo "$RAW_MSG" > "$TEMP_MSG_FILE"
 
-ui_content_box "Suggested Commit Message" "$RAW_MSG"
+while true; do
+  RAW_MSG=$(cat "$TEMP_MSG_FILE")
+  ui_content_box "Suggested Commit Message" "$RAW_MSG"
+  ACTION=$(ui_prompt_proceed "commit")
 
-ACTION=$(ui_prompt_proceed "commit")
-
-[ "$ACTION" = "edit" ] && ${EDITOR:-nano} "$TEMP_MSG_FILE" && RAW_MSG=$(cat "$TEMP_MSG_FILE")
-
-if [ -n "$RAW_MSG" ]; then
-  git commit -F "$TEMP_MSG_FILE"
-  ui_success "Committed successfully."
-else
-  ui_error "Message is empty. Commit aborted."
-fi
+  case "$ACTION" in
+    proceed)
+      if [ -n "$RAW_MSG" ]; then
+        git commit -F "$TEMP_MSG_FILE"
+        ui_success "Committed successfully."
+      else
+        ui_error "Message is empty. Commit aborted."
+      fi
+      break
+      ;;
+    edit)
+      ${EDITOR:-nano} "$TEMP_MSG_FILE"
+      ;;
+    *)
+      ui_cancel
+      break
+      ;;
+  esac
+done
 
 rm -f "$TEMP_MSG_FILE"

@@ -223,24 +223,24 @@ ui_checklist_end() {
 ui_confirm() {
   local Q="${1:-Continue?}"
   local ANS
-  printf "\n  %s ${_CD}[y/N]${_C0}  " "$Q"
-  read -r ANS
+  printf "\n  %s ${_CD}[y/N]${_C0}  " "$Q" >/dev/tty
+  read -r ANS </dev/tty
   [[ "$ANS" =~ ^[yY]$ ]]
 }
 
 ui_prompt() {
   local Q="$1"
   local ANS
-  printf "  %s: " "$Q"
-  read -r ANS
+  printf "  %s: " "$Q" >/dev/tty
+  read -r ANS </dev/tty
   echo "$ANS"
 }
 
 ui_prompt_proceed() {
   local LABEL="${1:-proceed}"
   local ANS
-  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel  " "$LABEL"
-  read -r ANS
+  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel  " "$LABEL" >/dev/tty
+  read -r ANS </dev/tty
   case "$ANS" in
     [eE]) echo "edit"    ;;
     "")   echo "proceed" ;;
@@ -250,8 +250,8 @@ ui_prompt_proceed() {
 
 ui_prompt_post() {
   local ANS
-  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit  "
-  read -r ANS
+  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit  " >/dev/tty
+  read -r ANS </dev/tty
   case "$ANS" in
     [yY]) echo "post" ;;
     [eE]) echo "edit" ;;
@@ -260,6 +260,89 @@ ui_prompt_post() {
 }
 
 ui_press_enter() {
-  printf "\n  ${_CD}Press Enter to exit...${_C0}  "
-  read -r _
+  printf "\n  ${_CD}Press Enter to exit...${_C0}  " >/dev/tty
+  read -r _ </dev/tty
+}
+
+# ─── Code snippet box ─────────────────────────────────────────────────────────
+# Shows a bordered code block with dim monospace-style content.
+# Usage: ui_code_snippet "filename" "diff_lines"
+
+ui_code_snippet() {
+  local FILENAME="$1" CODE="$2"
+  [ -z "$CODE" ] && return
+  local TLEN=${#FILENAME}
+  local DASHES=$((_W - TLEN - 12))
+  [ $DASHES -lt 1 ] && DASHES=1
+  echo ""
+  printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
+  while IFS= read -r LINE; do
+    # Colour added lines green, removed lines red, rest dim
+    local COLOR="$_CD"
+    case "$LINE" in
+      "+"*) COLOR="$_CG" ;;
+      "-"*) COLOR="$_CR" ;;
+    esac
+    local STRIPPED="${LINE:0:$_IW}"
+    local PAD=$((_IW - ${#STRIPPED}))
+    [ $PAD -lt 0 ] && PAD=0
+    printf "  │  ${COLOR}%s${_C0}%${PAD}s  │\n" "$STRIPPED" ""
+  done <<< "$CODE"
+  _bot
+  echo ""
+}
+# Shows a rich card for a single issue with full context.
+# Usage: ui_issue_card INDEX TOTAL CATEGORY TEXT PR_CONTEXT
+#
+# "  ╭────────────────────────────────────────────────────────╮"
+# "  │  Issue 3 of 18  ·  Architecture                       │"
+# "  ├────────────────────────────────────────────────────────┤"
+# "  │  Full issue text word-wrapped across                   │"
+# "  │  as many lines as needed                               │"
+# "  │                                                        │"
+# "  │  PR #25 · feat: enhance eligibility check              │"
+# "  ╰────────────────────────────────────────────────────────╯"
+
+ui_issue_card() {
+  local INDEX="$1" TOTAL="$2" CATEGORY="$3" TEXT="$4" PR_CONTEXT="$5"
+  local HEADER="Issue ${INDEX} of ${TOTAL}  ·  ${CATEGORY}"
+  echo ""
+  _top
+  _row "$HEADER" "$_CB"
+  _mid
+  # Word-wrap issue text at inner width, print each line as a box row
+  echo "$TEXT" | fold -s -w $_IW | while IFS= read -r LINE; do
+    _row "$LINE"
+  done
+  _row ""
+  _row "$PR_CONTEXT" "$_CD"
+  _bot
+  echo ""
+}
+
+# ─── Issue triage prompt (Stage 1) ────────────────────────────────────────────
+# Returns: "generate" | "ignore" | "quit"
+ui_prompt_triage() {
+  local ANS
+  printf "  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit  " >/dev/tty
+  read -r ANS </dev/tty
+  case "$ANS" in
+    [gG]) echo "generate" ;;
+    [qQ]) echo "quit"     ;;
+    *)    echo "ignore"   ;;
+  esac
+}
+
+# ─── Comment review prompt (Stage 2) ──────────────────────────────────────────
+# Returns: "post" | "edit" | "skip" | "quit"
+ui_prompt_review() {
+  local ANS
+  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[e]${_C0} edit   ${_CD}[n]${_C0} skip   ${_CD}[q]${_C0} quit  " >/dev/tty
+  read -r ANS </dev/tty
+  case "$ANS" in
+    [yY]) echo "post" ;;
+    [eE]) echo "edit" ;;
+    [qQ]) echo "quit" ;;
+    *)    echo "skip" ;;
+  esac
 }

@@ -264,14 +264,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 ui_checklist_end
 
-# ─── STEP 7: Post comments? ───────────────────────────────────────────────────
-if ! ui_confirm "Post comments on this PR?"; then
-  ui_info "No comments posted."
-  ui_press_enter
-  exit 0
-fi
-
-# ─── STEP 8: Select Language ──────────────────────────────────────────────────
+# ─── STEP 7: Select language (once, before the loop) ─────────────────────────
 LANG_CHOICE=$(printf "PT — Portuguese\nEN — English\nES — Spanish" | fzf \
   --prompt="  Comment language  " \
   --header="Select the language for PR comments" \
@@ -305,54 +298,111 @@ RULES:
 - Mention the problem clearly and optionally hint at the fix
 - Output ONLY the comment text, nothing else"
 
-# ─── STEP 9: Generate and post comments ───────────────────────────────────────
+# ─── STEP 8 & 9: Issue by issue — triage then generate ───────────────────────
 COMMENTS_POSTED=0
+TOTAL_ISSUES=${#ALL_ISSUES[@]}
+ISSUE_INDEX=0
+STOP=0
 
 for ISSUE in "${ALL_ISSUES[@]}"; do
-  ui_section "$ISSUE"
-  ui_step "Generating comment in ${COMMENT_LANG}..."
+  [ $STOP -eq 1 ] && break
+  ISSUE_INDEX=$((ISSUE_INDEX + 1))
 
-  local_TEMPLATE="${PROMPT_COMMENT_TEMPLATE:-$DEFAULT_COMMENT_TEMPLATE}"
-  COMMENT_PROMPT=$(render_template "$local_TEMPLATE" \
-    "__ISSUE__"        "$ISSUE"        \
-    "__PR_TITLE__"     "$PR_TITLE"     \
-    "__COMMENT_LANG__" "$COMMENT_LANG")
+  # Extract category and full text from "[Category] text..." format
+  CATEGORY=$(echo "$ISSUE" | sed 's/^\[\([^]]*\)\].*/\1/')
+  TEXT=$(echo "$ISSUE" | sed 's/^\[[^]]*\] //')
+  PR_CONTEXT="PR #${PR_NUMBER}  ·  ${PR_TITLE}"
 
-  GENERATED_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
-  EXIT_CODE=$?
-
-  if [ $EXIT_CODE -eq 130 ]; then
-    ui_cancel; break
+  # Extract filename from issue text and find relevant diff snippet
+  FILENAME=$(echo "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json)' | head -1)
+  SNIPPET=""
+  if [ -n "$FILENAME" ]; then
+    SNIPPET=$(echo "$PR_DIFF" | awk -v fn="$FILENAME" '
+      $0 ~ ("diff --git.*" fn) { found=1; count=0; next }
+      /^diff --git/ && found    { exit }
+      found {
+        if ($0 !~ /^index |^--- |^\+\+\+ |^@@/) { print; count++ }
+        if (count >= 15) exit
+      }
+    ')
   fi
 
-  if [ $EXIT_CODE -ne 0 ] || [ -z "$GENERATED_COMMENT" ]; then
-    ui_error "Failed to generate comment. Skipping."
-    continue
-  fi
+  # ── Stage 1: Show issue card + code snippet + triage options ───────────────
+  ui_issue_card "$ISSUE_INDEX" "$TOTAL_ISSUES" "$CATEGORY" "$TEXT" "$PR_CONTEXT"
+  [ -n "$SNIPPET" ] && ui_code_snippet "$FILENAME" "$SNIPPET"
 
-  ui_content_box "Generated Comment" "$GENERATED_COMMENT"
+  TRIAGE=$(ui_prompt_triage)
 
-  ACTION=$(ui_prompt_post)
+  case "$TRIAGE" in
+    quit)
+      ui_cancel
+      STOP=1
+      break
+      ;;
+    ignore)
+      ui_info "Ignored."
+      continue
+      ;;
+    generate)
+      # ── Stage 2: Generate comment and review ─────────────────────────────
+      ui_step "Generating comment in ${COMMENT_LANG}..."
 
-  if [ "$ACTION" = "edit" ]; then
-    TEMP_FILE=$(mktemp /tmp/pr_comment_XXXXXX.txt)
-    echo "$GENERATED_COMMENT" > "$TEMP_FILE"
-    ${EDITOR:-nano} "$TEMP_FILE"
-    GENERATED_COMMENT=$(cat "$TEMP_FILE")
-    rm -f "$TEMP_FILE"
-    ACTION="post"
-  fi
+      local_TEMPLATE="${PROMPT_COMMENT_TEMPLATE:-$DEFAULT_COMMENT_TEMPLATE}"
+      COMMENT_PROMPT=$(render_template "$local_TEMPLATE" \
+        "__ISSUE__"        "$ISSUE"        \
+        "__PR_TITLE__"     "$PR_TITLE"     \
+        "__COMMENT_LANG__" "$COMMENT_LANG")
 
-  if [ "$ACTION" = "post" ]; then
-    if gh pr comment "$PR_NUMBER" --body "$GENERATED_COMMENT" 2>/dev/null; then
-      ui_success "Comment posted."
-      COMMENTS_POSTED=$((COMMENTS_POSTED + 1))
-    else
-      ui_error "Failed to post comment via gh."
-    fi
-  else
-    ui_info "Skipped."
-  fi
+      GENERATED_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
+      EXIT_CODE=$?
+
+      if [ $EXIT_CODE -eq 130 ]; then
+        ui_cancel
+        STOP=1
+        break
+      fi
+
+      if [ $EXIT_CODE -ne 0 ] || [ -z "$GENERATED_COMMENT" ]; then
+        ui_error "Failed to generate comment. Skipping."
+        continue
+      fi
+
+      # Review loop: show comment, act on it, re-show if edited
+      while true; do
+        ui_content_box "Generated Comment" "$GENERATED_COMMENT"
+        REVIEW=$(ui_prompt_review)
+
+        case "$REVIEW" in
+          post)
+            if gh pr comment "$PR_NUMBER" --body "$GENERATED_COMMENT" 2>/dev/null; then
+              ui_success "Comment posted."
+              COMMENTS_POSTED=$((COMMENTS_POSTED + 1))
+            else
+              ui_error "Failed to post comment via gh."
+            fi
+            break
+            ;;
+          edit)
+            TEMP_FILE=$(mktemp /tmp/pr_comment_XXXXXX.txt)
+            echo "$GENERATED_COMMENT" > "$TEMP_FILE"
+            ${EDITOR:-nano} "$TEMP_FILE"
+            GENERATED_COMMENT=$(cat "$TEMP_FILE")
+            rm -f "$TEMP_FILE"
+            # loop back to show updated comment
+            ;;
+          quit)
+            ui_cancel
+            STOP=1
+            break
+            ;;
+          skip)
+            ui_info "Skipped."
+            break
+            ;;
+        esac
+      done
+      ;;
+  esac
 done
 
 # ─── Done ─────────────────────────────────────────────────────────────────────
