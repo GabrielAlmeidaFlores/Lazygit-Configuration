@@ -145,6 +145,7 @@ Code Quality
 Test Coverage
 Performance
 Bugs
+Fix Validation
 Spelling & Grammar
 All" | fzf \
   --multi \
@@ -162,6 +163,7 @@ Code Quality
 Test Coverage
 Performance
 Bugs
+Fix Validation
 Spelling & Grammar"
 fi
 
@@ -273,6 +275,7 @@ get_instructions() {
     "Test Coverage")        ui_print "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
     "Performance")          ui_print "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
     "Bugs")                 ui_print "${PROMPT_INSTRUCTIONS_BUGS:-Check for potential bugs: null dereferences, off-by-one errors, race conditions, incorrect logic, resource leaks.}" ;;
+    "Fix Validation")       ui_print "${PROMPT_INSTRUCTIONS_FIX_VALIDATION:-Review existing PR comments requesting fixes and validate if they have been addressed in the current diff.}" ;;
     "Spelling & Grammar")   ui_print "${PROMPT_INSTRUCTIONS_SPELLING:-Detect language and check for spelling mistakes, typos, missing accents in Portuguese/Spanish, grammatical errors in comments and strings.}" ;;
   esac
 }
