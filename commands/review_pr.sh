@@ -331,7 +331,8 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   ui_issue_card "$ISSUE_INDEX" "$TOTAL_ISSUES" "$CATEGORY" "$TEXT" "$PR_CONTEXT"
   [ -n "$SNIPPET" ] && ui_code_snippet "$FILENAME" "$SNIPPET"
 
-  TRIAGE=$(ui_prompt_triage)
+  ui_prompt_triage
+  TRIAGE="$UI_ACTION"
 
   case "$TRIAGE" in
     quit)
@@ -370,7 +371,8 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
       # Review loop: show comment, act on it, re-show if edited
       while true; do
         ui_content_box "Generated Comment" "$GENERATED_COMMENT"
-        REVIEW=$(ui_prompt_review)
+        ui_prompt_review
+        REVIEW="$UI_ACTION"
 
         case "$REVIEW" in
           post)

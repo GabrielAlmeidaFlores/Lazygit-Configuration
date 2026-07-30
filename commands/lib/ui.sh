@@ -219,6 +219,15 @@ ui_checklist_end() {
 }
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────
+# All prompt functions write directly to /dev/tty and store results in globals.
+# Never call them inside $(...) — read the global after calling.
+#
+#   UI_INPUT   ← set by ui_prompt
+#   UI_ACTION  ← set by ui_prompt_proceed, ui_prompt_post,
+#                          ui_prompt_triage, ui_prompt_review
+
+UI_INPUT=""
+UI_ACTION=""
 
 ui_confirm() {
   local Q="${1:-Continue?}"
@@ -228,34 +237,39 @@ ui_confirm() {
   [[ "$ANS" =~ ^[yY]$ ]]
 }
 
+# Usage:  ui_prompt "Question"
+#         VALUE="$UI_INPUT"
 ui_prompt() {
-  local Q="$1"
-  local ANS
-  printf "  %s: " "$Q" >/dev/tty
-  read -r ANS </dev/tty
-  echo "$ANS"
+  UI_INPUT=""
+  printf "\n  %s\n  ${_CC}→${_C0}  " "$1" >/dev/tty
+  read -r UI_INPUT </dev/tty
 }
 
+# Usage:  ui_prompt_proceed "commit"
+#         ACTION="$UI_ACTION"   → "proceed" | "edit" | "skip"
 ui_prompt_proceed() {
-  local LABEL="${1:-proceed}"
+  UI_ACTION=""
   local ANS
-  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel  " "$LABEL" >/dev/tty
+  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
   read -r ANS </dev/tty
   case "$ANS" in
-    [eE]) echo "edit"    ;;
-    "")   echo "proceed" ;;
-    *)    echo "skip"    ;;
+    [eE]) UI_ACTION="edit"    ;;
+    "")   UI_ACTION="proceed" ;;
+    *)    UI_ACTION="skip"    ;;
   esac
 }
 
+# Usage:  ui_prompt_post
+#         ACTION="$UI_ACTION"   → "post" | "edit" | "skip"
 ui_prompt_post() {
+  UI_ACTION=""
   local ANS
-  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit  " >/dev/tty
+  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
   case "$ANS" in
-    [yY]) echo "post" ;;
-    [eE]) echo "edit" ;;
-    *)    echo "skip" ;;
+    [yY]) UI_ACTION="post" ;;
+    [eE]) UI_ACTION="edit" ;;
+    *)    UI_ACTION="skip" ;;
   esac
 }
 
@@ -321,28 +335,32 @@ ui_issue_card() {
 }
 
 # ─── Issue triage prompt (Stage 1) ────────────────────────────────────────────
-# Returns: "generate" | "ignore" | "quit"
+# Usage:  ui_prompt_triage
+#         ACTION="$UI_ACTION"   → "generate" | "ignore" | "quit"
 ui_prompt_triage() {
+  UI_ACTION=""
   local ANS
-  printf "  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit  " >/dev/tty
+  printf "\n  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
   case "$ANS" in
-    [gG]) echo "generate" ;;
-    [qQ]) echo "quit"     ;;
-    *)    echo "ignore"   ;;
+    [gG]) UI_ACTION="generate" ;;
+    [qQ]) UI_ACTION="quit"     ;;
+    *)    UI_ACTION="ignore"   ;;
   esac
 }
 
 # ─── Comment review prompt (Stage 2) ──────────────────────────────────────────
-# Returns: "post" | "edit" | "skip" | "quit"
+# Usage:  ui_prompt_review
+#         ACTION="$UI_ACTION"   → "post" | "edit" | "skip" | "quit"
 ui_prompt_review() {
+  UI_ACTION=""
   local ANS
-  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[e]${_C0} edit   ${_CD}[n]${_C0} skip   ${_CD}[q]${_C0} quit  " >/dev/tty
+  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[e]${_C0} edit   ${_CD}[n]${_C0} skip   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
   case "$ANS" in
-    [yY]) echo "post" ;;
-    [eE]) echo "edit" ;;
-    [qQ]) echo "quit" ;;
-    *)    echo "skip" ;;
+    [yY]) UI_ACTION="post" ;;
+    [eE]) UI_ACTION="edit" ;;
+    [qQ]) UI_ACTION="quit" ;;
+    *)    UI_ACTION="skip" ;;
   esac
 }

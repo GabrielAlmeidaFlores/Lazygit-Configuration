@@ -11,7 +11,8 @@ fi
 
 DIFF_SNIPPET=$(git diff --cached --unified=3 --no-color | head -n 200)
 
-USER_CONTEXT=$(ui_prompt "Optional context (Enter to skip)")
+ui_prompt "Optional context (Enter to skip)"
+USER_CONTEXT="$UI_INPUT"
 
 VERBOSE=1
 CONTEXT_SECTION=""
@@ -55,9 +56,9 @@ echo "$RAW_MSG" > "$TEMP_MSG_FILE"
 while true; do
   RAW_MSG=$(cat "$TEMP_MSG_FILE")
   ui_content_box "Suggested Commit Message" "$RAW_MSG"
-  ACTION=$(ui_prompt_proceed "commit")
+  ui_prompt_proceed "commit"
 
-  case "$ACTION" in
+  case "$UI_ACTION" in
     proceed)
       if [ -n "$RAW_MSG" ]; then
         git commit -F "$TEMP_MSG_FILE"

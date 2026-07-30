@@ -12,7 +12,8 @@ fi
 DIFF_STAT=$(git diff --cached --stat | head -n 15)
 DIFF_SNIPPET=$(git diff --cached --unified=3 | head -n 60)
 
-USER_CONTEXT=$(ui_prompt "Optional context (Enter to skip)")
+ui_prompt "Optional context (Enter to skip)"
+USER_CONTEXT="$UI_INPUT"
 
 VERBOSE=1
 CONTEXT_SECTION=""
@@ -68,9 +69,9 @@ echo "$FINAL_NAME" > "$TEMP_FILE"
 while true; do
   FINAL_NAME=$(cat "$TEMP_FILE")
   ui_content_box "Suggested Branch Name" "$FINAL_NAME"
-  ACTION=$(ui_prompt_proceed "create branch")
+  ui_prompt_proceed "create branch"
 
-  case "$ACTION" in
+  case "$UI_ACTION" in
     proceed)
       if [ -n "$FINAL_NAME" ]; then
         git checkout -b "$FINAL_NAME"
