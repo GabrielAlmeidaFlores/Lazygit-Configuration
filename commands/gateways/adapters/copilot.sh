@@ -40,7 +40,6 @@ _generative_ia_copilot() {
     _CANCELLED=1
     [ -n "$_AI_PID" ] && kill "$_AI_PID" 2>/dev/null && wait "$_AI_PID" 2>/dev/null
     rm -f "$_TEMP_OUT"
-    echo "" >&2
     ui_cancel >&2
   }
   trap '_ai_cancel' INT
@@ -88,7 +87,7 @@ _generative_ia_copilot() {
       if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
         rm -f "$_TEMP_OUT"
         trap - INT
-        echo "$RESPONSE"
+        ui_print "$RESPONSE"
         return 0
       fi
 

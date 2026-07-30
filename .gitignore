@@ -1,0 +1,6 @@
+# LazyGit state file (contains user-specific paths and cache)
+state.yml
+
+# Temporary files
+*.tmp
+.DS_Store

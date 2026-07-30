@@ -36,7 +36,7 @@ render_template() {
   while [ $# -ge 2 ]; do
     RESULT="${RESULT//$1/$2}"; shift 2
   done
-  echo "$RESULT"
+  ui_print "$RESULT"
 }
 
 PROMPT=$(render_template "$PROMPT_COMMIT_TEMPLATE" \
@@ -49,7 +49,7 @@ EXIT_CODE=$?
 [ $EXIT_CODE -ne 0 ] && ui_error "Failed to get AI response." && exit 1
 
 TEMP_MSG_FILE=$(mktemp)
-echo "$RAW_MSG" > "$TEMP_MSG_FILE"
+ui_print "$RAW_MSG" > "$TEMP_MSG_FILE"
 
 while true; do
   RAW_MSG=$(cat "$TEMP_MSG_FILE")
