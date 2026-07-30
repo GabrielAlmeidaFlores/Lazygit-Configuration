@@ -71,9 +71,9 @@ _generative_ia_copilot() {
 
     while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
       if [ "$VERBOSE" = "1" ]; then
-        _run_with_timeout $TIMEOUT "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
       else
-        _run_with_timeout $TIMEOUT "$COPILOT_BIN" "${MODEL_ARGS[@]}" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
+        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
       fi
       _AI_PID=$!
       wait "$_AI_PID"

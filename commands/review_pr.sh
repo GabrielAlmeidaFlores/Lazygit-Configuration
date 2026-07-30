@@ -159,7 +159,7 @@ get_instructions() {
 
 DEFAULT_ANALYSIS_TEMPLATE="You are a senior software engineer performing a focused code review.
 
-Analyze ONLY for: __ANALYSIS_NAME__
+Analyze the diff below ONLY for: __ANALYSIS_NAME__
 
 PR TITLE: __PR_TITLE__
 PR AUTHOR: __PR_AUTHOR__
@@ -169,19 +169,27 @@ __PR_BODY__
 CODE DIFF (up to 400 lines):
 __PR_DIFF__
 
-SPECIFIC ANALYSIS FOCUS:
+FOCUS:
 __INSTRUCTIONS__
 
-STRICT OUTPUT FORMAT — do not deviate:
-If no issues found:
+YOUR RESPONSE MUST START WITH ONE OF THESE TWO LINES — no other text before it:
+
   ANALYSIS_STATUS: OK
+  (use this when there are no issues)
 
-If issues found:
   ANALYSIS_STATUS: ISSUES_FOUND
-  ISSUE: <one concise description per line, include filename if identifiable from diff>
-  ISSUE: <another issue>
+  ISSUE: <one issue per line, include filename if visible>
+  (use this when issues are found)
 
-No preamble, no explanation, no closing remarks. Output only the structured lines above."
+EXAMPLE — no issues:
+ANALYSIS_STATUS: OK
+
+EXAMPLE — issues found:
+ANALYSIS_STATUS: ISSUES_FOUND
+ISSUE: Missing input validation on user endpoint (auth.service.ts)
+ISSUE: API key logged in debug mode (logger.ts)
+
+Begin your response now:"
 
 # run_analysis ANALYSIS_NAME INSTRUCTIONS
 # Calls generative_ia with a focused prompt for the given analysis type.
@@ -217,13 +225,28 @@ run_analysis() {
   fi
 
   local STATUS
-  STATUS=$(echo "$RESPONSE" | grep "^ANALYSIS_STATUS:" | head -1 | sed 's/ANALYSIS_STATUS: //')
+  STATUS=$(echo "$RESPONSE" | grep -i "^[[:space:]]*ANALYSIS_STATUS:" | head -1 | sed 's/.*ANALYSIS_STATUS:[[:space:]]*//')
+
+  if [ -z "$STATUS" ]; then
+    local LOWER
+    LOWER=$(echo "$RESPONSE" | tr '[:upper:]' '[:lower:]')
+    if echo "$LOWER" | grep -qE "no .*(issue|problem|violation|concern|finding)|looks good|nothing (found|detected|identified)|no significant|lgtm|clean code|well.written"; then
+      STATUS="OK"
+    else
+      STATUS="ISSUES_FOUND"
+      echo "$RESPONSE" | grep -iE "^[-*•]|^ISSUE:|^[0-9]+\." | sed 's/^[-*•[:space:]]*//' | sed 's/^ISSUE:[[:space:]]*//' | grep -v "^$" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
+    fi
+  fi
+
   echo "$STATUS" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
 
   if [ "$STATUS" = "ISSUES_FOUND" ]; then
     local ISSUES
-    ISSUES=$(echo "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
-    echo "$ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
+    if [ ! -f "$RESULTS_DIR/${ANALYSIS_KEY}.issues" ]; then
+      ISSUES=$(echo "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
+      echo "$ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
+    fi
+    ISSUES=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.issues")
     while IFS= read -r ISSUE_LINE; do
       [ -n "$ISSUE_LINE" ] && ALL_ISSUES+=("[$ANALYSIS_NAME] $ISSUE_LINE")
     done <<< "$ISSUES"
