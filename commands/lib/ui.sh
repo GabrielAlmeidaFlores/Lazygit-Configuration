@@ -243,6 +243,8 @@ ui_prompt() {
   UI_INPUT=""
   printf "\n  %s\n  ${_CC}→${_C0}  " "$1" >/dev/tty
   read -r UI_INPUT </dev/tty
+  # If empty input, erase the arrow line so it doesn't show as a blank row
+  [ -z "$UI_INPUT" ] && printf "\033[1A\033[2K" >/dev/tty
 }
 
 # Usage:  ui_prompt_proceed "commit"
