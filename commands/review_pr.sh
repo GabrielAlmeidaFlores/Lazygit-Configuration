@@ -14,6 +14,32 @@ export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/loca
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
+# _resolve_gh_auth
+# Resolves the correct GitHub account for the current repository and sets
+# GH_TOKEN accordingly, so all gh and gh api calls use the right identity.
+# Priority:
+#   1. PAT embedded in the remote origin URL (https://TOKEN@github.com/...)
+#   2. git config --local github.user  →  gh auth token -u <user>
+#   3. Default active gh account (no override needed)
+_resolve_gh_auth() {
+  local REMOTE_URL PAT
+  REMOTE_URL=$(git remote get-url origin 2>/dev/null)
+  PAT=$(echo "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
+  if [ -n "$PAT" ]; then
+    export GH_TOKEN="$PAT"
+    return 0
+  fi
+
+  local LOCAL_GH_USER TOKEN
+  LOCAL_GH_USER=$(git config --local github.user 2>/dev/null)
+  if [ -n "$LOCAL_GH_USER" ]; then
+    TOKEN=$(gh auth token -u "$LOCAL_GH_USER" 2>/dev/null)
+    [ -n "$TOKEN" ] && export GH_TOKEN="$TOKEN"
+  fi
+}
+
+_resolve_gh_auth
+
 clear
 
 for dep in gh fzf jq; do
