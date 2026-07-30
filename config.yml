@@ -34,8 +34,8 @@ git:
       pager: delta --dark --paging=never --syntax-theme=Dracula
 
 customCommands:
-  - key: 'R'
-    context: "files"
+  - key: "<c-a>"
+    context: "global"
     description: "AI PR Review"
     command: "bash ~/.config/lazygit/commands/review_pr.sh"
     output: terminal
