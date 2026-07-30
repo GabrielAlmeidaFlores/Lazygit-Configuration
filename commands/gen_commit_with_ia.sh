@@ -1,4 +1,12 @@
 #!/bin/bash
+# gen_commit_with_ia.sh — AI-powered commit message generator for Lazygit
+#
+# Generates a conventional commit message from staged changes using the
+# configured AI provider. Presents the result for review before committing.
+#
+# Dependencies: git (staged changes required)
+# Config:       commands/config.env
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"

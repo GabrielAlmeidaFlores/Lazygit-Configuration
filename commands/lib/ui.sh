@@ -1,84 +1,78 @@
 #!/bin/bash
 # lib/ui.sh — Terminal UI library
-# Box-drawing + ANSI colors, no emojis. Bash 3.2+ compatible.
+# Box-drawing borders, ANSI colors, no emojis. Compatible with bash 3.2+.
 #
-# Source in any script:
+# Usage:
 #   source "$SCRIPT_DIR/lib/ui.sh"
 #
-# ─── API ──────────────────────────────────────────────────────────────────────
+# Globals set by prompt functions (never use $(...) to call them):
+#   UI_INPUT   — set by ui_prompt
+#   UI_ACTION  — set by ui_prompt_proceed, ui_prompt_post,
+#                         ui_prompt_triage, ui_prompt_review
 #
 # Layout
-#   ui_header  "Title"               full-width header box
-#   ui_panel   "line1" "line2" ...   info box (multiple lines)
-#   ui_section "Title"               inline section separator with label
-#   ui_spacer                        blank line
+#   ui_header  "Title"                   Full-width header box
+#   ui_panel   "line1" "line2" ...        Info box with multiple lines
+#   ui_section "Title"                   Inline section separator with label
+#   ui_spacer                            Blank line
 #
 # Messages
-#   ui_success "msg"                 OK    msg  (green)
-#   ui_error   "msg"                 FAIL  msg  (red)
-#   ui_warning "msg"                 WARN  msg  (yellow)
-#   ui_info    "msg"                       msg  (normal, indented)
-#   ui_cancel                              Cancelled.  (dim)
-#   ui_step    "msg"                  →   msg  (cyan, for progress steps)
+#   ui_success "msg"                     OK    msg  (green bold)
+#   ui_error   "msg"                     FAIL  msg  (red bold)
+#   ui_warning "msg"                     WARN  msg  (yellow)
+#   ui_info    "msg"                           msg  (normal, indented)
+#   ui_cancel                                  Cancelled.  (dim)
+#   ui_step    "msg"                       →  msg  (cyan)
 #
-# Content box
-#   ui_content_box "Title" "text"    bordered box with colored content inside
+# Content
+#   ui_content_box   "Title" "text"       Bordered box with green content
+#   ui_code_snippet  "filename" "lines"   Bordered code block from diff
+#   ui_issue_card    INDEX TOTAL CAT TEXT PR_CONTEXT
 #
 # Results table
-#   ui_table_start                   draw top border
+#   ui_table_start
 #   ui_table_row "Label" "Value" ["ok"|"warn"|"error"|""]
-#   ui_table_end                     draw bottom border
+#   ui_table_end
 #
 # Checklist
-#   ui_checklist_start "Title" N     header box with title and item count
-#   ui_checklist_item  "text"        [ ] text row inside the box
-#   ui_checklist_end                 bottom border
+#   ui_checklist_start "Title" N
+#   ui_checklist_item  "text"
+#   ui_checklist_end
 #
-# Prompts
-#   ui_confirm  "Question"           Question [y/N]  → returns 0 (yes) or 1 (no)
-#   ui_prompt   "Question"           Question:       → echoes the user's input
-#   ui_prompt_proceed "label"        [Enter] label / [e] edit / [Ctrl+C] cancel
-#   ui_prompt_post                   [y] post / [n] skip / [e] edit
-#   ui_press_enter                   Press Enter to exit...
+# Prompts — write to /dev/tty, result in global, never call inside $(...)
+#   ui_confirm         "Question"         [y/N]   → returns 0/1
+#   ui_prompt          "Question"         free text → UI_INPUT
+#   ui_prompt_proceed  "label"            [Enter]/[e]/[Ctrl+C] → UI_ACTION
+#   ui_prompt_post                        [y]/[n]/[e] → UI_ACTION
+#   ui_prompt_triage                      [g]/[n]/[q] → UI_ACTION
+#   ui_prompt_review                      [y]/[e]/[n]/[q] → UI_ACTION
+#   ui_press_enter                        Press Enter to exit
 
-# ─── Colors ───────────────────────────────────────────────────────────────────
-_CG="\033[0;32m"    # green
-_CGB="\033[1;32m"   # green bold
-_CR="\033[0;31m"    # red
-_CRB="\033[1;31m"   # red bold
-_CY="\033[0;33m"    # yellow
-_CC="\033[0;36m"    # cyan
-_CB="\033[1m"       # bold
-_CD="\033[2m"       # dim
-_C0="\033[0m"       # reset
+_CG="\033[0;32m"
+_CGB="\033[1;32m"
+_CR="\033[0;31m"
+_CRB="\033[1;31m"
+_CY="\033[0;33m"
+_CC="\033[0;36m"
+_CB="\033[1m"
+_CD="\033[2m"
+_C0="\033[0m"
 
-# ─── Layout constants ─────────────────────────────────────────────────────────
-# Total printed width of a box line (including the 2-space left margin):
-#   "  ╭" + (_W-4) dashes + "╮"  =  _W chars on screen
-# Inner content width for a row:
-#   "  │  " (5) + _IW chars + "  │" (3) = _W chars → _IW = _W - 8
 _W=60
-_IW=$((_W - 8))   # = 52
+_IW=$((_W - 8))
 
-# ─── Internal helpers ─────────────────────────────────────────────────────────
-
-# Repeat CHAR exactly N times
 _rep() {
   local N=$1 CHAR="$2" OUT="" I=0
   while [ $I -lt $N ]; do OUT="${OUT}${CHAR}"; I=$((I+1)); done
   printf '%s' "$OUT"
 }
 
-# Box top/mid/bottom borders  (use _W-4 dashes so total width = _W)
 _top() { printf "  ╭%s╮\n" "$(_rep $((_W-4)) '─')"; }
 _mid() { printf "  ├%s┤\n" "$(_rep $((_W-4)) '─')"; }
 _bot() { printf "  ╰%s╯\n" "$(_rep $((_W-4)) '─')"; }
 
-# Padded interior row:  "  │  TEXT...PAD  │"
-# Optionally wrap TEXT with a color code (COLOR/_C0).
 _row() {
   local TEXT="$1" COLOR="${2:-}"
-  # Truncate if text exceeds inner width
   [ ${#TEXT} -gt $_IW ] && TEXT="${TEXT:0:$((_IW-3))}..."
   local PAD=$((_IW - ${#TEXT}))
   if [ -n "$COLOR" ]; then
@@ -88,8 +82,8 @@ _row() {
   fi
 }
 
-# ─── Layout ───────────────────────────────────────────────────────────────────
-
+# ui_header "Title"
+# Renders a full-width bordered header box with a bold title.
 ui_header() {
   echo ""
   _top
@@ -98,6 +92,8 @@ ui_header() {
   echo ""
 }
 
+# ui_panel "line1" ["line2" ...]
+# Renders a bordered info box with one row per argument.
 ui_panel() {
   echo ""
   _top
@@ -106,10 +102,10 @@ ui_panel() {
   echo ""
 }
 
-# Inline section separator:  "  ──  LABEL  ─────────────"
+# ui_section "Title"
+# Renders an inline section separator: "  ──  Title  ──────────────"
 ui_section() {
   local LABEL="$*"
-  # 2 (margin) + 4 (── + spaces) + LABEL + 2 (spaces) + DASHES = _W
   local DASHES=$((_W - ${#LABEL} - 8))
   [ $DASHES -lt 2 ] && DASHES=2
   echo ""
@@ -119,8 +115,6 @@ ui_section() {
 
 ui_spacer() { echo ""; }
 
-# ─── Messages ─────────────────────────────────────────────────────────────────
-
 ui_success() { printf "  ${_CGB}OK${_C0}    %s\n"   "$*"; }
 ui_error()   { printf "  ${_CRB}FAIL${_C0}  %s\n"   "$*"; }
 ui_warning() { printf "  ${_CY}WARN${_C0}  %s\n"    "$*"; }
@@ -128,17 +122,10 @@ ui_info()    { printf "  %s\n"                       "$*"; }
 ui_cancel()  { printf "  ${_CD}Cancelled.${_C0}\n";       }
 ui_step()    { printf "  ${_CC}→${_C0}  %s\n"       "$*"; }
 
-# ─── Content box ──────────────────────────────────────────────────────────────
-# "  ╭─  Title  ────────────────────────────────────────╮"
-# "  │                                                  │"
-# "  │  green-bold content line                         │"
-# "  │                                                  │"
-# "  ╰──────────────────────────────────────────────────╯"
-
+# ui_content_box "Title" "text"
+# Renders a bordered box with a bold title and green-colored content lines.
 ui_content_box() {
   local TITLE="$1" CONTENT="$2"
-  # Header: "  ╭─  TITLE  DASHES╮"
-  # chars:   2+1+1+2+TITLE+2+DASHES+1 = 9+TITLE+DASHES = _W
   local DASHES=$((_W - ${#TITLE} - 9))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
@@ -154,16 +141,17 @@ ui_content_box() {
   echo ""
 }
 
-# ─── Results table ────────────────────────────────────────────────────────────
-# Layout per row:  "  │  LABEL    LPAD    VALUE    VPAD  │"
-# Fixed label column width:
 _COL=22
 
+# ui_table_start
+# Draws the top border of a results table. Follow with ui_table_row calls.
 ui_table_start() {
   echo ""
   _top
 }
 
+# ui_table_row "Label" "Value" ["ok"|"warn"|"error"]
+# Renders a single row with a bold label and a colored value.
 ui_table_row() {
   local LABEL="$1" VALUE="$2" STATUS="${3:-}"
   local VCOLOR="$_C0"
@@ -172,7 +160,6 @@ ui_table_row() {
     warn)  VCOLOR="$_CY"  ;;
     error) VCOLOR="$_CR"  ;;
   esac
-  # label col: _COL chars,  value col: _IW - _COL - 2 chars
   local VCOL=$((_IW - _COL - 2))
   [ $VCOL -lt 4 ] && VCOL=4
   local LPAD=$((_COL - ${#LABEL}))
@@ -184,16 +171,15 @@ ui_table_row() {
     "$LABEL" "" "$VALUE" ""
 }
 
+# ui_table_end
+# Draws the bottom border of a results table.
 ui_table_end() {
   _bot
   echo ""
 }
 
-# ─── Checklist ────────────────────────────────────────────────────────────────
-# Row format:  "  │  [ ] TEXT...PAD  │"
-# chars:        2+1+2+4+TEXT+PAD+2+1 = 12+TEXT+PAD = _W  →  TEXT+PAD = _W-12
-# TEXT max = _IW - 4  (since _IW = _W-8 and TEXT+PAD = _IW-4 when PAD>=0)
-
+# ui_checklist_start "Title" [N]
+# Opens a checklist box with a bold title and optional item count.
 ui_checklist_start() {
   local TITLE="$1" COUNT="${2:-}"
   local HEADER="$TITLE"
@@ -204,98 +190,34 @@ ui_checklist_start() {
   _mid
 }
 
+# ui_checklist_item "text"
+# Renders a single [ ] item row inside a checklist box.
 ui_checklist_item() {
   local TEXT="$1"
-  local MAX=$((_IW - 4))          # max text chars  (4 = "[ ] " prefix)
+  local MAX=$((_IW - 4))
   [ ${#TEXT} -gt $MAX ] && TEXT="${TEXT:0:$((MAX-3))}..."
   local PAD=$((_IW - 4 - ${#TEXT}))
   [ $PAD -lt 0 ] && PAD=0
   printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$TEXT" ""
 }
 
+# ui_checklist_end
+# Closes a checklist box.
 ui_checklist_end() {
   _bot
   echo ""
 }
 
-# ─── Prompts ──────────────────────────────────────────────────────────────────
-# All prompt functions write directly to /dev/tty and store results in globals.
-# Never call them inside $(...) — read the global after calling.
-#
-#   UI_INPUT   ← set by ui_prompt
-#   UI_ACTION  ← set by ui_prompt_proceed, ui_prompt_post,
-#                          ui_prompt_triage, ui_prompt_review
-
-UI_INPUT=""
-UI_ACTION=""
-
-ui_confirm() {
-  local Q="${1:-Continue?}"
-  local ANS
-  printf "\n  %s ${_CD}[y/N]${_C0}  " "$Q" >/dev/tty
-  read -r ANS </dev/tty
-  [[ "$ANS" =~ ^[yY]$ ]]
-}
-
-# Usage:  ui_prompt "Question"
-#         VALUE="$UI_INPUT"
-ui_prompt() {
-  UI_INPUT=""
-  printf "\n  %s\n  ${_CC}→${_C0}  " "$1" >/dev/tty
-  read -r UI_INPUT </dev/tty
-  # If empty input, erase the arrow line so it doesn't show as a blank row
-  [ -z "$UI_INPUT" ] && printf "\033[1A\033[2K\n" >/dev/tty
-}
-
-# Usage:  ui_prompt_proceed "commit"
-#         ACTION="$UI_ACTION"   → "proceed" | "edit" | "skip"
-ui_prompt_proceed() {
-  UI_ACTION=""
-  local ANS
-  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
-  read -r ANS </dev/tty
-  printf "\033[1A\033[2K\n" >/dev/tty
-  case "$ANS" in
-    [eE]) UI_ACTION="edit"    ;;
-    "")   UI_ACTION="proceed" ;;
-    *)    UI_ACTION="skip"    ;;
-  esac
-}
-
-# Usage:  ui_prompt_post
-#         ACTION="$UI_ACTION"   → "post" | "edit" | "skip"
-ui_prompt_post() {
-  UI_ACTION=""
-  local ANS
-  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit\n  ${_CC}→${_C0}  " >/dev/tty
-  read -r ANS </dev/tty
-  printf "\033[1A\033[2K\n" >/dev/tty
-  case "$ANS" in
-    [yY]) UI_ACTION="post" ;;
-    [eE]) UI_ACTION="edit" ;;
-    *)    UI_ACTION="skip" ;;
-  esac
-}
-
-ui_press_enter() {
-  printf "\n  ${_CD}Press Enter to exit...${_C0}  " >/dev/tty
-  read -r _ </dev/tty
-}
-
-# ─── Code snippet box ─────────────────────────────────────────────────────────
-# Shows a bordered code block with dim monospace-style content.
-# Usage: ui_code_snippet "filename" "diff_lines"
-
+# ui_code_snippet "filename" "diff_lines"
+# Renders a bordered code block. Lines starting with + are green, - are red.
 ui_code_snippet() {
   local FILENAME="$1" CODE="$2"
   [ -z "$CODE" ] && return
-  local TLEN=${#FILENAME}
-  local DASHES=$((_W - TLEN - 12))
+  local DASHES=$((_W - ${#FILENAME} - 12))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
   printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
   while IFS= read -r LINE; do
-    # Colour added lines green, removed lines red, rest dim
     local COLOR="$_CD"
     case "$LINE" in
       "+"*) COLOR="$_CG" ;;
@@ -309,18 +231,10 @@ ui_code_snippet() {
   _bot
   echo ""
 }
-# Shows a rich card for a single issue with full context.
-# Usage: ui_issue_card INDEX TOTAL CATEGORY TEXT PR_CONTEXT
-#
-# "  ╭────────────────────────────────────────────────────────╮"
-# "  │  Issue 3 of 18  ·  Architecture                       │"
-# "  ├────────────────────────────────────────────────────────┤"
-# "  │  Full issue text word-wrapped across                   │"
-# "  │  as many lines as needed                               │"
-# "  │                                                        │"
-# "  │  PR #25 · feat: enhance eligibility check              │"
-# "  ╰────────────────────────────────────────────────────────╯"
 
+# ui_issue_card INDEX TOTAL CATEGORY TEXT PR_CONTEXT
+# Renders a rich bordered card for a single PR issue.
+# The issue text is word-wrapped. PR context is shown in dim at the bottom.
 ui_issue_card() {
   local INDEX="$1" TOTAL="$2" CATEGORY="$3" TEXT="$4" PR_CONTEXT="$5"
   local HEADER="Issue ${INDEX} of ${TOTAL}  ·  ${CATEGORY}"
@@ -328,7 +242,6 @@ ui_issue_card() {
   _top
   _row "$HEADER" "$_CB"
   _mid
-  # Word-wrap issue text at inner width, print each line as a box row
   echo "$TEXT" | fold -s -w $_IW | while IFS= read -r LINE; do
     _row "$LINE"
   done
@@ -338,9 +251,71 @@ ui_issue_card() {
   echo ""
 }
 
-# ─── Issue triage prompt (Stage 1) ────────────────────────────────────────────
-# Usage:  ui_prompt_triage
-#         ACTION="$UI_ACTION"   → "generate" | "ignore" | "quit"
+UI_INPUT=""
+UI_ACTION=""
+
+# ui_confirm "Question"
+# Displays a [y/N] prompt. Returns 0 if the user answers y/Y, 1 otherwise.
+ui_confirm() {
+  local Q="${1:-Continue?}"
+  local ANS
+  printf "\n  %s ${_CD}[y/N]${_C0}  " "$Q" >/dev/tty
+  read -r ANS </dev/tty
+  [[ "$ANS" =~ ^[yY]$ ]]
+}
+
+# ui_prompt "Question"
+# Displays a free-text input prompt. Stores the result in UI_INPUT.
+# If the user presses Enter without typing, the arrow line is erased.
+ui_prompt() {
+  UI_INPUT=""
+  printf "\n  %s\n  ${_CC}→${_C0}  " "$1" >/dev/tty
+  read -r UI_INPUT </dev/tty
+  [ -z "$UI_INPUT" ] && printf "\033[1A\033[2K\n" >/dev/tty
+}
+
+# ui_prompt_proceed "label"
+# Displays [Enter] / [e] / [Ctrl+C] options. Stores result in UI_ACTION.
+# UI_ACTION values: "proceed" | "edit" | "skip"
+ui_prompt_proceed() {
+  UI_ACTION=""
+  local ANS
+  printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
+  read -r ANS </dev/tty
+  printf "\033[1A\033[2K\n" >/dev/tty
+  case "$ANS" in
+    [eE]) UI_ACTION="edit"    ;;
+    "")   UI_ACTION="proceed" ;;
+    *)    UI_ACTION="skip"    ;;
+  esac
+}
+
+# ui_prompt_post
+# Displays [y] / [n] / [e] options for posting a comment. Stores result in UI_ACTION.
+# UI_ACTION values: "post" | "edit" | "skip"
+ui_prompt_post() {
+  UI_ACTION=""
+  local ANS
+  printf "\n  ${_CD}[y]${_C0} post   ${_CD}[n]${_C0} skip   ${_CD}[e]${_C0} edit\n  ${_CC}→${_C0}  " >/dev/tty
+  read -r ANS </dev/tty
+  printf "\033[1A\033[2K\n" >/dev/tty
+  case "$ANS" in
+    [yY]) UI_ACTION="post" ;;
+    [eE]) UI_ACTION="edit" ;;
+    *)    UI_ACTION="skip" ;;
+  esac
+}
+
+# ui_press_enter
+# Displays a "Press Enter to exit" prompt and waits.
+ui_press_enter() {
+  printf "\n  ${_CD}Press Enter to exit...${_C0}  " >/dev/tty
+  read -r _ </dev/tty
+}
+
+# ui_prompt_triage
+# Stage 1 triage prompt for PR issue review. Stores result in UI_ACTION.
+# UI_ACTION values: "generate" | "ignore" | "quit"
 ui_prompt_triage() {
   UI_ACTION=""
   local ANS
@@ -354,9 +329,9 @@ ui_prompt_triage() {
   esac
 }
 
-# ─── Comment review prompt (Stage 2) ──────────────────────────────────────────
-# Usage:  ui_prompt_review
-#         ACTION="$UI_ACTION"   → "post" | "edit" | "skip" | "quit"
+# ui_prompt_review
+# Stage 2 comment review prompt for PR issue review. Stores result in UI_ACTION.
+# UI_ACTION values: "post" | "edit" | "skip" | "quit"
 ui_prompt_review() {
   UI_ACTION=""
   local ANS

@@ -1,19 +1,26 @@
 #!/bin/bash
-# Cursor Agent CLI adapter for generative_ia gateway
+# cursor.sh — Cursor Agent CLI adapter for generative_ia
 #
 # Configuration (via config.env):
-#   MODEL            - Primary AI model (empty = Cursor default)
-#   FALLBACK_MODEL   - Fallback model if primary fails (empty = no fallback)
-#   MAX_RETRIES      - Number of retry attempts per model (default: 2)
-#   TIMEOUT          - Request timeout in seconds (default: 60)
-#   CURSOR_BIN       - Path to agent binary (empty = auto-detect from PATH)
-#   CURSOR_MODE      - Agent mode: ask | plan (default: ask)
+#   MODEL        — Primary model    (empty = Cursor default)
+#   FALLBACK_MODEL — Fallback model (empty = no fallback)
+#   MAX_RETRIES  — Retry attempts per model  (default: 2)
+#   TIMEOUT      — Request timeout in seconds  (default: 60)
+#   CURSOR_BIN   — Path to agent binary  (empty = auto-detect from PATH)
+#   CURSOR_MODE  — Agent mode: ask | plan  (default: ask)
+#
+# _generative_ia_cursor PROMPT [VERBOSE]
+#   Calls the Cursor agent CLI with PROMPT and prints the response to stdout.
+#   Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
 
 CURSOR_BIN="${CURSOR_BIN:-$(which agent)}"
 CURSOR_MODE="${CURSOR_MODE:-ask}"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_helpers.sh"
 
+# _generative_ia_cursor PROMPT [VERBOSE]
+# Calls the Cursor agent CLI with PROMPT and prints the response to stdout.
+# Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
 _generative_ia_cursor() {
   local PROMPT="$1"
   local VERBOSE="${2:-0}"
@@ -60,9 +67,7 @@ _generative_ia_cursor() {
       MODEL_LABEL="$CURRENT_MODEL"
     fi
 
-    if [ "$VERBOSE" = "1" ]; then
-      ui_step "Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
-    fi
+    [ "$VERBOSE" = "1" ] && ui_step "Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
 
     local ATTEMPT=1
 
@@ -92,7 +97,6 @@ _generative_ia_cursor() {
       fi
 
       ATTEMPT=$((ATTEMPT + 1))
-
       if [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; then
         sleep $((2 ** (ATTEMPT - 1)))
       fi
@@ -107,9 +111,7 @@ _generative_ia_cursor() {
   rm -f "$_TEMP_OUT"
   trap - INT
 
-  if [ $_CANCELLED -eq 1 ]; then
-    return 130
-  fi
+  [ $_CANCELLED -eq 1 ] && return 130
 
   ui_error "AI call failed after exhausting all models" >&2
   return 1

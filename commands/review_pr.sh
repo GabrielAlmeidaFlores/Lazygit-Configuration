@@ -1,8 +1,11 @@
 #!/bin/bash
-# AI PR Review — Interactive PR analysis with AI via Lazygit
+# review_pr.sh — Interactive AI-powered PR review for Lazygit
+#
+# Lists open PRs, runs focused AI analyses, and posts natural code review
+# comments on GitHub. All AI prompts are configured in config.env.
 #
 # Dependencies: gh, fzf, jq
-# Config: commands/config.env — all prompts and model lists live there
+# Config:       commands/config.env
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -13,7 +16,6 @@ source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 clear
 
-# ─── Check dependencies ───────────────────────────────────────────────────────
 for dep in gh fzf jq; do
   if ! command -v "$dep" &>/dev/null; then
     ui_error "'$dep' not found. Please install it before continuing."
@@ -21,7 +23,8 @@ for dep in gh fzf jq; do
   fi
 done
 
-# ─── Template renderer ────────────────────────────────────────────────────────
+# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
+# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
 render_template() {
   local RESULT="$1"; shift
   while [ $# -ge 2 ]; do
@@ -30,7 +33,6 @@ render_template() {
   echo "$RESULT"
 }
 
-# ─── STEP 1: Select PR ────────────────────────────────────────────────────────
 ui_header "AI PR Review"
 ui_step "Fetching open PRs..."
 
@@ -55,7 +57,6 @@ SELECTED_PR=$(echo "$PR_LIST" | fzf \
 PR_NUMBER=$(echo "$SELECTED_PR" | grep -oE '^#[0-9]+' | tr -d '#')
 PR_TITLE=$(echo "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
-# ─── STEP 2: Select AI Model ──────────────────────────────────────────────────
 CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
 
 DEFAULT_CURSOR_MODELS="default
@@ -68,11 +69,11 @@ o3
 gemini-2.5-pro"
 
 DEFAULT_COPILOT_MODELS="default
-claude-3.5-sonnet
-claude-3.7-sonnet
-gpt-4o
-gpt-4.1
-o3"
+claude-sonnet-4.6
+claude-sonnet-4.5
+claude-opus-4.6
+gpt-5.3-codex
+gemini-3.1-pro-preview"
 
 if [ "$CURRENT_PROVIDER" = "cursor" ]; then
   MODEL_LIST="${CURSOR_MODELS:+default
@@ -99,7 +100,6 @@ else
   MODEL_LABEL="${MODEL:-default}"
 fi
 
-# ─── STEP 3: Select Analysis Types ────────────────────────────────────────────
 ANALYSES_RAW=$(printf "Architecture\nSecurity\nCode Quality\nTest Coverage\nPerformance\nAll" | fzf \
   --multi \
   --prompt="  Analyses (Tab to select)  " \
@@ -117,7 +117,6 @@ Test Coverage
 Performance"
 fi
 
-# ─── STEP 4: Fetch PR Data ────────────────────────────────────────────────────
 ui_panel \
   "PR #${PR_NUMBER}  ·  ${PR_TITLE}" \
   "Model: ${MODEL_LABEL}  ·  Provider: ${CURRENT_PROVIDER}"
@@ -140,12 +139,14 @@ PR_DIFF=$(gh pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
 
 ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
 
-# ─── STEP 5: Run Analyses ─────────────────────────────────────────────────────
 RESULTS_DIR=$(mktemp -d /tmp/pr_review_XXXXXX)
 trap 'rm -rf "$RESULTS_DIR"' EXIT
 ALL_ISSUES=()
 ANALYSES_ORDER=()
 
+# get_instructions ANALYSIS_NAME
+# Returns the instruction text for a given analysis type, sourced from
+# config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
     "Architecture")  echo "${PROMPT_INSTRUCTIONS_ARQUITETURA:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
@@ -182,6 +183,11 @@ If issues found:
 
 No preamble, no explanation, no closing remarks. Output only the structured lines above."
 
+# run_analysis ANALYSIS_NAME INSTRUCTIONS
+# Calls generative_ia with a focused prompt for the given analysis type.
+# Writes ANALYSIS_STATUS (OK or ISSUES_FOUND) to $RESULTS_DIR/<key>.status
+# and issues to $RESULTS_DIR/<key>.issues. Appends to ALL_ISSUES array.
+# Returns 130 on user cancellation, 1 on AI failure, 0 on success.
 run_analysis() {
   local ANALYSIS_NAME="$1"
   local INSTRUCTIONS="$2"
@@ -236,7 +242,6 @@ while IFS= read -r ANALYSIS; do
   fi
 done <<< "$ANALYSES_RAW"
 
-# ─── STEP 6: Results summary ──────────────────────────────────────────────────
 ui_section "Results  —  PR #${PR_NUMBER}"
 
 ui_table_start
@@ -253,7 +258,6 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
 done
 ui_table_end
 
-# ─── STEP 6b: Issues checklist ────────────────────────────────────────────────
 if [ ${#ALL_ISSUES[@]} -eq 0 ]; then
   ui_success "No issues found. PR looks good!"
   ui_press_enter
@@ -266,7 +270,6 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 ui_checklist_end
 
-# ─── STEP 7: Select language (once, before the loop) ─────────────────────────
 LANG_CHOICE=$(printf "PT — Portuguese\nEN — English\nES — Spanish" | fzf \
   --prompt="  Comment language  " \
   --header="Select the language for PR comments" \
@@ -300,7 +303,6 @@ RULES:
 - Mention the problem clearly and optionally hint at the fix
 - Output ONLY the comment text, nothing else"
 
-# ─── STEP 8 & 9: Issue by issue — triage then generate ───────────────────────
 COMMENTS_POSTED=0
 TOTAL_ISSUES=${#ALL_ISSUES[@]}
 ISSUE_INDEX=0
@@ -310,12 +312,10 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   [ $STOP -eq 1 ] && break
   ISSUE_INDEX=$((ISSUE_INDEX + 1))
 
-  # Extract category and full text from "[Category] text..." format
   CATEGORY=$(echo "$ISSUE" | sed 's/^\[\([^]]*\)\].*/\1/')
   TEXT=$(echo "$ISSUE" | sed 's/^\[[^]]*\] //')
   PR_CONTEXT="PR #${PR_NUMBER}  ·  ${PR_TITLE}"
 
-  # Extract filename from issue text and find relevant diff snippet
   FILENAME=$(echo "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json)' | head -1)
   SNIPPET=""
   if [ -n "$FILENAME" ]; then
@@ -329,7 +329,6 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
     ')
   fi
 
-  # ── Stage 1: Show issue card + code snippet + triage options ───────────────
   ui_issue_card "$ISSUE_INDEX" "$TOTAL_ISSUES" "$CATEGORY" "$TEXT" "$PR_CONTEXT"
   [ -n "$SNIPPET" ] && ui_code_snippet "$FILENAME" "$SNIPPET"
 
@@ -347,7 +346,6 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
       continue
       ;;
     generate)
-      # ── Stage 2: Generate comment and review ─────────────────────────────
       ui_step "Generating comment in ${COMMENT_LANG}..."
 
       local_TEMPLATE="${PROMPT_COMMENT_TEMPLATE:-$DEFAULT_COMMENT_TEMPLATE}"
@@ -370,7 +368,6 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
         continue
       fi
 
-      # Review loop: show comment, act on it, re-show if edited
       while true; do
         ui_content_box "Generated Comment" "$GENERATED_COMMENT"
         ui_prompt_review
@@ -392,7 +389,6 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
             ${EDITOR:-nano} "$TEMP_FILE"
             GENERATED_COMMENT=$(cat "$TEMP_FILE")
             rm -f "$TEMP_FILE"
-            # loop back to show updated comment
             ;;
           quit)
             ui_cancel
@@ -409,6 +405,5 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   esac
 done
 
-# ─── Done ─────────────────────────────────────────────────────────────────────
 ui_panel "Done  ·  ${COMMENTS_POSTED} comment(s) posted on PR #${PR_NUMBER}"
 ui_press_enter

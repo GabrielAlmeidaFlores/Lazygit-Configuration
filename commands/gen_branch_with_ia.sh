@@ -1,4 +1,12 @@
 #!/bin/bash
+# gen_branch_with_ia.sh — AI-powered branch name generator for Lazygit
+#
+# Generates a conventional branch name from staged changes using the
+# configured AI provider. Presents the result for review before creating.
+#
+# Dependencies: git (staged changes required)
+# Config:       commands/config.env
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
@@ -63,10 +71,8 @@ EXIT_CODE=$?
 CLEAN_NAME=$(echo "$RAW_NAME" | grep -oE '(feat|fix|chore|refactor|docs|test|ci|hotfix)/[a-z0-9][a-z0-9-]*' | head -n1)
 [ -z "$CLEAN_NAME" ] && CLEAN_NAME=$(echo "$RAW_NAME" | tr -d '`()[]{}!@#$%^&*+=|\\<>?,;:'"'"'"' | grep -oE '[a-z0-9/][a-z0-9/_-]*' | tail -n1)
 
-FINAL_NAME="$CLEAN_NAME"
-
 TEMP_FILE=$(mktemp)
-echo "$FINAL_NAME" > "$TEMP_FILE"
+echo "$CLEAN_NAME" > "$TEMP_FILE"
 
 while true; do
   FINAL_NAME=$(cat "$TEMP_FILE")

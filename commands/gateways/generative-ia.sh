@@ -1,46 +1,37 @@
 #!/bin/bash
-# Gateway for interacting with AI/LLM services
+# generative-ia.sh — Gateway for AI/LLM services
 #
-# Dispatches to the correct provider adapter based on AI_PROVIDER in config.env.
+# Routes calls to the active provider adapter based on AI_PROVIDER in config.env.
 # Supported providers: cursor | copilot
 #
 # Configuration (via commands/config.env):
-#   AI_PROVIDER      - Active provider: cursor | copilot (default: copilot)
-#   MODEL            - Primary AI model (empty = provider default)
-#   FALLBACK_MODEL   - Fallback model if primary fails (empty = no fallback)
-#   MAX_RETRIES      - Number of retry attempts per model (default: 2)
-#   TIMEOUT          - Request timeout in seconds (default: 60)
+#   AI_PROVIDER    — Active provider: cursor | copilot  (default: copilot)
+#   MODEL          — Primary model   (empty = provider default)
+#   FALLBACK_MODEL — Fallback model  (empty = no fallback)
+#   MAX_RETRIES    — Retry attempts per model  (default: 2)
+#   TIMEOUT        — Request timeout in seconds  (default: 60)
 #
-# Function: generative_ia(prompt, [verbose])
-#   Sends a prompt to the configured AI provider and returns the response.
-#   Parameters:
-#     prompt   (string)  - The text prompt to send
-#     verbose  (0|1)     - When 1, prints progress indicators to stderr
-#   Returns:
-#     Success (0)   - Outputs the AI response to stdout
-#     Cancelled (130) - User pressed Ctrl+C
-#     Failure (1)   - Outputs error message to stderr
+# generative_ia PROMPT [VERBOSE]
+#   Sends PROMPT to the configured provider and prints the response to stdout.
+#   VERBOSE=1 prints progress indicators to the terminal.
+#   Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
 #
-# Usage (sourced):
+# Sourced usage:
 #   source /path/to/generative-ia.sh
-#   response=$(generative_ia "Your prompt here")
-#   response=$(generative_ia "Your prompt here" 1)  # verbose
+#   response=$(generative_ia "prompt")
 #
-# Usage (standalone):
-#   ./generative-ia.sh "Your prompt here"
-#   ./generative-ia.sh "Your prompt here" 1
+# Standalone usage:
+#   ./generative-ia.sh "prompt" [1]
 
-# ─── PATH (needed when launched from GUI apps like Lazygit) ───────────────────
 export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-# ─── Load ui.sh if not already sourced (needed when run standalone) ───────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if ! command -v ui_error >/dev/null 2>&1; then
   _UI_LIB="$SCRIPT_DIR/../lib/ui.sh"
   [ -f "$_UI_LIB" ] && source "$_UI_LIB"
 fi
 
-# ─── Load config ──────────────────────────────────────────────────────────────
 CONFIG_FILE="$SCRIPT_DIR/../../config.env"
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -51,7 +42,6 @@ else
   TIMEOUT=60
 fi
 
-# ─── Load provider adapter ────────────────────────────────────────────────────
 PROVIDER="${AI_PROVIDER:-copilot}"
 ADAPTER_FILE="$SCRIPT_DIR/adapters/${PROVIDER}.sh"
 
@@ -63,7 +53,8 @@ fi
 
 source "$ADAPTER_FILE"
 
-# ─── Public function: generative_ia ───────────────────────────────────────────
+# generative_ia PROMPT [VERBOSE]
+# Public entry point. Dispatches to the active provider adapter.
 generative_ia() {
   case "$PROVIDER" in
     cursor)
@@ -79,11 +70,10 @@ generative_ia() {
   esac
 }
 
-# ─── Standalone execution ─────────────────────────────────────────────────────
 if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
   if [ $# -eq 0 ]; then
-    echo "Usage: $0 \"Your prompt here\" [verbose]" >&2
-    echo "   or: source $0 && generative_ia \"Your prompt here\" [1]" >&2
+    echo "Usage: $0 \"prompt\" [verbose]" >&2
+    echo "   or: source $0 && generative_ia \"prompt\" [1]" >&2
     exit 1
   fi
   generative_ia "$1" "${2:-0}"
