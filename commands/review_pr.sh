@@ -250,20 +250,51 @@ get_instructions() {
 }
 
 # run_analysis ANALYSIS_NAME INSTRUCTIONS
-# Calls generative_ia with a focused prompt for the given analysis type.
-# Writes ANALYSIS_STATUS (OK or ISSUES_FOUND) to $RESULTS_DIR/<key>.status
-# and issues to $RESULTS_DIR/<key>.issues. Appends to ALL_ISSUES array.
-# Returns 130 on user cancellation, 1 on AI failure, 0 on success.
+# Runs 3 sequential AI passes for the given analysis type:
+#   Pass 1 — initial analysis of the diff
+#   Pass 2 — second analysis informed by Pass 1 findings
+#   Pass 3 — validates the deduplicated combined issues from passes 1 and 2
+# Writes ANALYSIS_STATUS and issues from Pass 3 to $RESULTS_DIR.
+# Appends confirmed issues to ALL_ISSUES. Returns 130 on cancellation, 1 on failure.
 run_analysis() {
   local ANALYSIS_NAME="$1"
   local INSTRUCTIONS="$2"
   local ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
 
-  ui_step "Analyzing  ${ANALYSIS_NAME}  (Ctrl+C to cancel)"
+  # _ai_call PROMPT
+  # Calls generative_ia and sets _AI_STATUS and _AI_ISSUES from the response.
+  # _AI_STATUS: "OK" | "ISSUES_FOUND" | "ERROR". Returns 130 on cancellation.
+  _ai_call() {
+    local PROMPT="$1"
+    _AI_STATUS="" _AI_ISSUES=""
+    local RESPONSE EXIT_CODE
+    RESPONSE=$(generative_ia "$PROMPT" 1)
+    EXIT_CODE=$?
+    [ $EXIT_CODE -eq 130 ] && return 130
+    [ $EXIT_CODE -ne 0 ] || [ -z "$RESPONSE" ] && _AI_STATUS="ERROR" && return 1
 
-  local TEMPLATE="$PROMPT_ANALYSIS_TEMPLATE"
-  local PROMPT
-  PROMPT=$(render_template "$TEMPLATE" \
+    _AI_STATUS=$(echo "$RESPONSE" | grep -i "^[[:space:]]*ANALYSIS_STATUS:" | head -1 | sed 's/.*ANALYSIS_STATUS:[[:space:]]*//')
+
+    if [ -z "$_AI_STATUS" ]; then
+      local LOWER
+      LOWER=$(echo "$RESPONSE" | tr '[:upper:]' '[:lower:]')
+      if echo "$LOWER" | grep -qE "no .*(issue|problem|violation|concern|finding)|looks good|nothing (found|detected|identified)|no significant|lgtm|clean code|well.written"; then
+        _AI_STATUS="OK"
+      else
+        _AI_STATUS="ISSUES_FOUND"
+        _AI_ISSUES=$(echo "$RESPONSE" | grep -iE "^[-*•]|^ISSUE:|^[0-9]+\." | sed 's/^[-*•[:space:]]*//' | sed 's/^ISSUE:[[:space:]]*//' | grep -v "^$")
+        return 0
+      fi
+    fi
+
+    if [ "$_AI_STATUS" = "ISSUES_FOUND" ]; then
+      _AI_ISSUES=$(echo "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
+    fi
+  }
+
+  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 1 of 3"
+  local P1_PROMPT
+  P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
     "__PR_TITLE__"      "$PR_TITLE"      \
     "__PR_AUTHOR__"     "$PR_AUTHOR"     \
@@ -271,43 +302,67 @@ run_analysis() {
     "__PR_DIFF__"       "$PR_DIFF"       \
     "__INSTRUCTIONS__"  "$INSTRUCTIONS")
 
-  local RESPONSE
-  RESPONSE=$(generative_ia "$PROMPT" 1)
-  local EXIT_CODE=$?
+  _ai_call "$P1_PROMPT"
+  local P1_EC=$?
+  [ $P1_EC -eq 130 ] && return 130
+  [ $P1_EC -ne 0 ]   && echo "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
+  local P1_STATUS="$_AI_STATUS" P1_ISSUES="$_AI_ISSUES"
+  local P1_RESULT="ANALYSIS_STATUS: ${P1_STATUS}"
+  [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
+${P1_ISSUES}"
 
-  [ $EXIT_CODE -eq 130 ] && return 130
+  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 2 of 3"
+  local P2_PROMPT
+  P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
+    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
+    "__PR_TITLE__"      "$PR_TITLE"      \
+    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
+    "__PR_BODY__"       "$PR_BODY"       \
+    "__PR_DIFF__"       "$PR_DIFF"       \
+    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
+    "__PASS1_RESULT__"  "$P1_RESULT")
 
-  if [ $EXIT_CODE -ne 0 ] || [ -z "$RESPONSE" ]; then
-    echo "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
-    return 1
+  _ai_call "$P2_PROMPT"
+  local P2_EC=$?
+  [ $P2_EC -eq 130 ] && return 130
+  [ $P2_EC -ne 0 ]   && echo "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
+  local P2_ISSUES="$_AI_ISSUES"
+
+  local COMBINED_ISSUES
+  COMBINED_ISSUES=$(printf "%s\n%s" "$P1_ISSUES" "$P2_ISSUES" \
+    | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
+
+  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 3 of 3"
+  local P3_PROMPT
+  P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
+    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
+    "__PR_TITLE__"      "$PR_TITLE"      \
+    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
+    "__PR_BODY__"       "$PR_BODY"       \
+    "__PR_DIFF__"       "$PR_DIFF"       \
+    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
+    "__COMBINED_ISSUES__" "$COMBINED_ISSUES")
+
+  _ai_call "$P3_PROMPT"
+  local P3_EC=$?
+  [ $P3_EC -eq 130 ] && return 130
+
+  local FINAL_STATUS FINAL_ISSUES
+  if [ $P3_EC -ne 0 ]; then
+    FINAL_STATUS="$P1_STATUS"
+    FINAL_ISSUES="$P1_ISSUES"
+  else
+    FINAL_STATUS="$_AI_STATUS"
+    FINAL_ISSUES="$_AI_ISSUES"
   fi
 
-  local STATUS
-  STATUS=$(echo "$RESPONSE" | grep -i "^[[:space:]]*ANALYSIS_STATUS:" | head -1 | sed 's/.*ANALYSIS_STATUS:[[:space:]]*//')
+  echo "$FINAL_STATUS" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
 
-  if [ -z "$STATUS" ]; then
-    local LOWER
-    LOWER=$(echo "$RESPONSE" | tr '[:upper:]' '[:lower:]')
-    if echo "$LOWER" | grep -qE "no .*(issue|problem|violation|concern|finding)|looks good|nothing (found|detected|identified)|no significant|lgtm|clean code|well.written"; then
-      STATUS="OK"
-    else
-      STATUS="ISSUES_FOUND"
-      echo "$RESPONSE" | grep -iE "^[-*•]|^ISSUE:|^[0-9]+\." | sed 's/^[-*•[:space:]]*//' | sed 's/^ISSUE:[[:space:]]*//' | grep -v "^$" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
-    fi
-  fi
-
-  echo "$STATUS" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
-
-  if [ "$STATUS" = "ISSUES_FOUND" ]; then
-    local ISSUES
-    if [ ! -f "$RESULTS_DIR/${ANALYSIS_KEY}.issues" ]; then
-      ISSUES=$(echo "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
-      echo "$ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
-    fi
-    ISSUES=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.issues")
+  if [ "$FINAL_STATUS" = "ISSUES_FOUND" ] && [ -n "$FINAL_ISSUES" ]; then
+    echo "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
     while IFS= read -r ISSUE_LINE; do
       [ -n "$ISSUE_LINE" ] && ALL_ISSUES+=("[$ANALYSIS_NAME] $ISSUE_LINE")
-    done <<< "$ISSUES"
+    done <<< "$FINAL_ISSUES"
   fi
 }
 
