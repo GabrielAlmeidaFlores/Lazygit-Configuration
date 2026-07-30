@@ -156,8 +156,8 @@ Interactive multi-step workflow to analyze open PRs and post inline comments on 
    - `Performance` — N+1 queries, inefficient loops, blocking operations
    - `Spelling & Grammar` — typos, missing accents (português), auto language detection
    - `All` — runs all six in parallel
-4. **Fetch PR data** — pulls title, description, author, and diff via `gh`
-5. **3-pass AI analysis** — for each selected analysis type:
+4. **Fetch PR data** — pulls title, description, author, diff, and existing comments via `gh`
+5. **3-pass AI analysis** — for each selected analysis type (with awareness of existing comments):
    - Pass 1: initial analysis of the diff
    - Pass 2: second independent analysis informed by Pass 1 findings
    - Pass 3: validates the deduplicated combined issues against the diff and filters false positives

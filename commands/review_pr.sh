@@ -184,6 +184,23 @@ PR_FILES=$(ui_print "$PR_INFO" | jq -r '.changedFiles')
 PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(gh_run pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
 
+ui_step "Fetching existing PR comments..."
+PR_COMMENTS=$(gh_run api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments" 2>/dev/null | jq -r '.[] | "[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
+PR_REVIEW_COMMENTS=$(gh_run pr view "$PR_NUMBER" --json comments --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
+
+EXISTING_COMMENTS=""
+if [ -n "$PR_COMMENTS" ] || [ -n "$PR_REVIEW_COMMENTS" ]; then
+  EXISTING_COMMENTS="EXISTING COMMENTS ON THIS PR:
+
+Inline Comments:
+${PR_COMMENTS:-None}
+
+General Comments:
+${PR_REVIEW_COMMENTS:-None}
+
+DO NOT report issues that have already been mentioned in the comments above."
+fi
+
 ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
 
 # get_diff_location FILENAME DIFF
@@ -303,12 +320,13 @@ run_analysis() {
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS")
 
   _ai_call "$P1_PROMPT"
   local P1_EC=$?
@@ -322,13 +340,14 @@ ${P1_ISSUES}"
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
-    "__PASS1_RESULT__"  "$P1_RESULT")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS" \
+    "__PASS1_RESULT__"       "$P1_RESULT")
 
   _ai_call "$P2_PROMPT"
   local P2_EC=$?
@@ -344,13 +363,14 @@ $P2_ISSUES" \
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
-    "__COMBINED_ISSUES__" "$COMBINED_ISSUES")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS" \
+    "__COMBINED_ISSUES__"    "$COMBINED_ISSUES")
 
   _ai_call "$P3_PROMPT"
   local P3_EC=$?
