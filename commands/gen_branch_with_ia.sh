@@ -5,14 +5,13 @@
 # configured AI provider. Presents the result for review before creating.
 #
 # Dependencies: git (staged changes required)
-# Config:       commands/config.env
+# Config:       commands/config.env  (PROMPT_BRANCH_TEMPLATE)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 clear
-
 ui_header "AI Branch Name"
 
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
@@ -30,40 +29,27 @@ USER_CONTEXT="$UI_INPUT"
 VERBOSE=1
 CONTEXT_SECTION=""
 if [ -n "$USER_CONTEXT" ]; then
-  CONTEXT_SECTION="
-
-USER PROVIDED CONTEXT:
+  CONTEXT_SECTION="USER PROVIDED CONTEXT:
 $USER_CONTEXT
 
 Consider this context when categorizing the changes and suggesting the branch name."
 fi
 
-PROMPT="As a Senior Developer, categorize these git changes and suggest a branch name.
+# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
+# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
+render_template() {
+  local RESULT="$1"; shift
+  while [ $# -ge 2 ]; do
+    RESULT="${RESULT//$1/$2}"; shift 2
+  done
+  echo "$RESULT"
+}
 
-FILES:
-$FILES_CHANGED
-
-STATS:
-$DIFF_STAT
-
-DIFF SNIPPET:
-$DIFF_SNIPPET
-
-LANGUAGE REQUIREMENT (CRITICAL):
-- MUST use ONLY English language for the branch name.
-- NO Spanish, Portuguese, or any other language allowed.
-
-DECISION LOGIC:
-1. If existing logic is being corrected, replaced, or adjusted → fix/
-2. If new files or new modules are added → feat/
-3. If only config, deps, docker, ci, build files changed → chore/
-4. If code structure changes but behavior is same → refactor/
-5. If only markdown or comments → docs/
-
-STRICT RULES:
-- Use kebab-case. Be specific. No emojis.
-- Output ONLY the branch name. No explanations.
-$CONTEXT_SECTION"
+PROMPT=$(render_template "$PROMPT_BRANCH_TEMPLATE" \
+  "__FILES__"   "$FILES_CHANGED" \
+  "__STATS__"   "$DIFF_STAT"     \
+  "__DIFF__"    "$DIFF_SNIPPET"  \
+  "__CONTEXT__" "$CONTEXT_SECTION")
 
 RAW_NAME=$(generative_ia "$PROMPT" "$VERBOSE")
 EXIT_CODE=$?

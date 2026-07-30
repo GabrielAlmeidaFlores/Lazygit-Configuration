@@ -5,14 +5,13 @@
 # configured AI provider. Presents the result for review before committing.
 #
 # Dependencies: git (staged changes required)
-# Config:       commands/config.env
+# Config:       commands/config.env  (PROMPT_COMMIT_TEMPLATE)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 clear
-
 ui_header "AI Commit Message"
 
 FILES=$(git diff --cached --name-only | head -n 15 | tr '\n' ', ')
@@ -30,32 +29,19 @@ VERBOSE=1
 CONTEXT_SECTION=""
 [ -n "$USER_CONTEXT" ] && CONTEXT_SECTION="USER PROVIDED CONTEXT: $USER_CONTEXT"
 
-PROMPT="
-Analyze the following DIFF code and follow the instructions below.
+# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
+# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
+render_template() {
+  local RESULT="$1"; shift
+  while [ $# -ge 2 ]; do
+    RESULT="${RESULT//$1/$2}"; shift 2
+  done
+  echo "$RESULT"
+}
 
-### START OF DIFF ###
-$DIFF_SNIPPET
-### END OF DIFF ###
-
-$CONTEXT_SECTION
-
-INSTRUCTIONS FOR SENIOR STAFF ENGINEER:
-Generate a Pull Request-style summary based on the DIFF above.
-
-STRICT STRUCTURE:
-1. Single-line title (max 30 chars).
-2. A blank line.
-3. Detailed overview paragraph (3-4 sentences) explaining 'what' and 'why'.
-4. Section: **<Category 1>**:
-   - Bullet points for technical 'how' using \`inline code\`.
-5. Section: **<Category 2>**:
-   - Bullet points for logic details.
-
-CRITICAL RULES:
-- NO PREAMBLE: Start directly with the title. No 'Here is...' or 'Sure'.
-- NO CODE COMPLETION: Do not try to finish the code in the diff.
-- OUTPUT: ONLY the message.
-"
+PROMPT=$(render_template "$PROMPT_COMMIT_TEMPLATE" \
+  "__DIFF__"    "$DIFF_SNIPPET" \
+  "__CONTEXT__" "$CONTEXT_SECTION")
 
 RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
 EXIT_CODE=$?

@@ -123,7 +123,7 @@ ui_panel \
 
 ui_step "Fetching PR data..."
 
-PR_INFO=$(gh pr view "$PR_NUMBER" --json title,body,author,additions,deletions,changedFiles 2>/dev/null)
+PR_INFO=$(gh pr view "$PR_NUMBER" --json title,body,author,additions,deletions,changedFiles,headRefOid 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
   ui_error "Failed to fetch PR #${PR_NUMBER} data."
@@ -135,9 +135,62 @@ PR_AUTHOR=$(echo "$PR_INFO" | jq -r '.author.login')
 PR_ADDITIONS=$(echo "$PR_INFO" | jq -r '.additions')
 PR_DELETIONS=$(echo "$PR_INFO" | jq -r '.deletions')
 PR_FILES=$(echo "$PR_INFO" | jq -r '.changedFiles')
+PR_COMMIT=$(echo "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(gh pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
 
 ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
+
+# get_diff_location FILENAME DIFF
+# Scans DIFF for the first added line belonging to a file matching FILENAME.
+# Prints "file/path.ext:line_number" on success, nothing if not found.
+get_diff_location() {
+  local FILENAME="$1" DIFF="$2"
+  echo "$DIFF" | awk -v fn="$FILENAME" '
+    $0 ~ ("\\+\\+\\+ b/.*" fn) {
+      file_path = substr($0, 7)
+      in_file = 1; current_line = 0; next
+    }
+    /^diff --git/ && in_file { exit }
+    in_file && /^@@ / {
+      sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
+      current_line = $0 + 0; next
+    }
+    in_file && /^\+[^+]/ && file_path != "" && current_line > 0 {
+      print file_path ":" current_line; exit
+    }
+    in_file && /^-/ { next }
+    in_file && current_line > 0 { current_line++ }
+  '
+}
+
+# post_review_comment PR_NUMBER BODY FILE_PATH LINE COMMIT_SHA
+# Posts an inline review comment on FILE_PATH:LINE.
+# Falls back to a general PR comment if the inline post fails.
+# Prints "inline" or "general" to indicate which method succeeded.
+post_review_comment() {
+  local PR_NUM="$1" BODY="$2" FILE_PATH="$3" LINE="$4" COMMIT="$5"
+
+  if [ -n "$FILE_PATH" ] && [ -n "$LINE" ] && [ -n "$COMMIT" ]; then
+    if gh api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
+        --method POST \
+        --field body="$BODY" \
+        --field commit_id="$COMMIT" \
+        --field path="$FILE_PATH" \
+        --field line="$LINE" \
+        --field side="RIGHT" \
+        >/dev/null 2>&1; then
+      echo "inline"
+      return 0
+    fi
+  fi
+
+  if gh pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
+    echo "general"
+    return 0
+  fi
+
+  return 1
+}
 
 RESULTS_DIR=$(mktemp -d /tmp/pr_review_XXXXXX)
 trap 'rm -rf "$RESULTS_DIR"' EXIT
@@ -157,40 +210,6 @@ get_instructions() {
   esac
 }
 
-DEFAULT_ANALYSIS_TEMPLATE="You are a senior software engineer performing a focused code review.
-
-Analyze the diff below ONLY for: __ANALYSIS_NAME__
-
-PR TITLE: __PR_TITLE__
-PR AUTHOR: __PR_AUTHOR__
-PR DESCRIPTION:
-__PR_BODY__
-
-CODE DIFF (up to 400 lines):
-__PR_DIFF__
-
-FOCUS:
-__INSTRUCTIONS__
-
-YOUR RESPONSE MUST START WITH ONE OF THESE TWO LINES — no other text before it:
-
-  ANALYSIS_STATUS: OK
-  (use this when there are no issues)
-
-  ANALYSIS_STATUS: ISSUES_FOUND
-  ISSUE: <one issue per line, include filename if visible>
-  (use this when issues are found)
-
-EXAMPLE — no issues:
-ANALYSIS_STATUS: OK
-
-EXAMPLE — issues found:
-ANALYSIS_STATUS: ISSUES_FOUND
-ISSUE: Missing input validation on user endpoint (auth.service.ts)
-ISSUE: API key logged in debug mode (logger.ts)
-
-Begin your response now:"
-
 # run_analysis ANALYSIS_NAME INSTRUCTIONS
 # Calls generative_ia with a focused prompt for the given analysis type.
 # Writes ANALYSIS_STATUS (OK or ISSUES_FOUND) to $RESULTS_DIR/<key>.status
@@ -203,7 +222,7 @@ run_analysis() {
 
   ui_step "Analyzing  ${ANALYSIS_NAME}  (Ctrl+C to cancel)"
 
-  local TEMPLATE="${PROMPT_ANALYSIS_TEMPLATE:-$DEFAULT_ANALYSIS_TEMPLATE}"
+  local TEMPLATE="$PROMPT_ANALYSIS_TEMPLATE"
   local PROMPT
   PROMPT=$(render_template "$TEMPLATE" \
     "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
@@ -305,26 +324,9 @@ case "$LANG_CHOICE" in
   "PT"*) COMMENT_LANG="Brazilian Portuguese" ;;
   "EN"*) COMMENT_LANG="English" ;;
   "ES"*) COMMENT_LANG="Spanish" ;;
-  *)     COMMENT_LANG="English" ;;
+   *)     COMMENT_LANG="English" ;;
 esac
 
-DEFAULT_COMMENT_TEMPLATE="You are a developer writing a code review comment on GitHub.
-
-Write a code review comment in __COMMENT_LANG__ about this specific issue:
-
-__ISSUE__
-
-PR context: \"__PR_TITLE__\"
-
-RULES:
-- Language: __COMMENT_LANG__
-- Sound like a human reviewer, direct and natural
-- No markdown headers, no bullet points, no titles
-- No formal openers such as Hi, Hello or I noticed
-- No closing remarks or sign-offs
-- 1 to 3 sentences maximum
-- Mention the problem clearly and optionally hint at the fix
-- Output ONLY the comment text, nothing else"
 
 COMMENTS_POSTED=0
 TOTAL_ISSUES=${#ALL_ISSUES[@]}
@@ -371,8 +373,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
     generate)
       ui_step "Generating comment in ${COMMENT_LANG}..."
 
-      local_TEMPLATE="${PROMPT_COMMENT_TEMPLATE:-$DEFAULT_COMMENT_TEMPLATE}"
-      COMMENT_PROMPT=$(render_template "$local_TEMPLATE" \
+      COMMENT_PROMPT=$(render_template "$PROMPT_COMMENT_TEMPLATE" \
         "__ISSUE__"        "$ISSUE"        \
         "__PR_TITLE__"     "$PR_TITLE"     \
         "__COMMENT_LANG__" "$COMMENT_LANG")
@@ -398,8 +399,16 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 
         case "$REVIEW" in
           post)
-            if gh pr comment "$PR_NUMBER" --body "$GENERATED_COMMENT" 2>/dev/null; then
-              ui_success "Comment posted."
+            LOCATION=$(get_diff_location "$FILENAME" "$PR_DIFF")
+            DIFF_PATH="${LOCATION%%:*}"
+            DIFF_LINE="${LOCATION##*:}"
+            POST_RESULT=$(post_review_comment \
+              "$PR_NUMBER" "$GENERATED_COMMENT" \
+              "$DIFF_PATH" "$DIFF_LINE" "$PR_COMMIT")
+            if [ $? -eq 0 ]; then
+              [ "$POST_RESULT" = "inline" ] \
+                && ui_success "Inline comment posted on ${DIFF_PATH}:${DIFF_LINE}" \
+                || ui_success "Comment posted."
               COMMENTS_POSTED=$((COMMENTS_POSTED + 1))
             else
               ui_error "Failed to post comment via gh."
