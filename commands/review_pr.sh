@@ -15,18 +15,20 @@ source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 # _resolve_gh_auth
-# Resolves the correct GitHub account for the current repository and sets
-# GH_TOKEN accordingly, so all gh and gh api calls use the right identity.
+# Resolves the GitHub PAT for the current repository without exporting GH_TOKEN
+# globally (which would break the Copilot CLI that rejects classic PATs).
+# Sets _GH_PAT for use in specific gh and gh api calls only.
 # Priority:
 #   1. PAT embedded in the remote origin URL (https://TOKEN@github.com/...)
 #   2. git config --local github.user  →  gh auth token -u <user>
-#   3. Default active gh account (no override needed)
+#   3. Default active gh account (no PAT override)
+_GH_PAT=""
 _resolve_gh_auth() {
   local REMOTE_URL PAT
   REMOTE_URL=$(git remote get-url origin 2>/dev/null)
   PAT=$(echo "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
   if [ -n "$PAT" ]; then
-    export GH_TOKEN="$PAT"
+    _GH_PAT="$PAT"
     return 0
   fi
 
@@ -34,7 +36,18 @@ _resolve_gh_auth() {
   LOCAL_GH_USER=$(git config --local github.user 2>/dev/null)
   if [ -n "$LOCAL_GH_USER" ]; then
     TOKEN=$(gh auth token -u "$LOCAL_GH_USER" 2>/dev/null)
-    [ -n "$TOKEN" ] && export GH_TOKEN="$TOKEN"
+    [ -n "$TOKEN" ] && _GH_PAT="$TOKEN"
+  fi
+}
+
+# gh_run CMD [ARGS...]
+# Runs a gh command with the resolved local PAT when available.
+# Use this wrapper for all gh and gh api calls instead of gh directly.
+gh_run() {
+  if [ -n "$_GH_PAT" ]; then
+    GH_TOKEN="$_GH_PAT" gh "$@"
+  else
+    gh "$@"
   fi
 }
 
@@ -62,7 +75,7 @@ render_template() {
 ui_header "AI PR Review"
 ui_step "Fetching open PRs..."
 
-PR_JSON=$(gh pr list --state open --json number,title,author,headRefName 2>/dev/null)
+PR_JSON=$(gh_run pr list --state open --json number,title,author,headRefName 2>/dev/null)
 
 if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   ui_error "No open PRs found in this repository."
@@ -149,7 +162,7 @@ ui_panel \
 
 ui_step "Fetching PR data..."
 
-PR_INFO=$(gh pr view "$PR_NUMBER" --json title,body,author,additions,deletions,changedFiles,headRefOid 2>/dev/null)
+PR_INFO=$(gh_run pr view "$PR_NUMBER" --json title,body,author,additions,deletions,changedFiles,headRefOid 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
   ui_error "Failed to fetch PR #${PR_NUMBER} data."
@@ -162,7 +175,7 @@ PR_ADDITIONS=$(echo "$PR_INFO" | jq -r '.additions')
 PR_DELETIONS=$(echo "$PR_INFO" | jq -r '.deletions')
 PR_FILES=$(echo "$PR_INFO" | jq -r '.changedFiles')
 PR_COMMIT=$(echo "$PR_INFO" | jq -r '.headRefOid')
-PR_DIFF=$(gh pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
+PR_DIFF=$(gh_run pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
 
 ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
 
@@ -197,7 +210,7 @@ post_review_comment() {
   local PR_NUM="$1" BODY="$2" FILE_PATH="$3" LINE="$4" COMMIT="$5"
 
   if [ -n "$FILE_PATH" ] && [ -n "$LINE" ] && [ -n "$COMMIT" ]; then
-    if gh api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
+    if gh_run api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
         --method POST \
         --field body="$BODY" \
         --field commit_id="$COMMIT" \
@@ -210,7 +223,7 @@ post_review_comment() {
     fi
   fi
 
-  if gh pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
+  if gh_run pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
     echo "general"
     return 0
   fi
