@@ -115,8 +115,8 @@ Test Coverage  (missing tests, edge cases, untested logic)
 Performance  (N+1 queries, inefficient loops, blocking ops)
 Bugs  (null dereferences, race conditions, logic errors)
 Spelling & Grammar  (typos, accents, grammar in strings)
-All  (runs all analyses above)
-Fix Validation  (validates fixes from existing PR comments)" | fzf \
+Fix Validation  (validates fixes from existing PR comments)
+All  (runs all analyses above)" | fzf \
   --multi \
   --prompt="  Analyses (Tab to select)  " \
   --header="Select one or more analysis types — Enter to confirm" \
