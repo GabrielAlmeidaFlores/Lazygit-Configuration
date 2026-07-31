@@ -56,6 +56,7 @@ SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
   --header="Open PRs — Enter to select, Ctrl+C to exit" \
   --height=50% \
   --border=rounded \
+  --margin=0,1,0,1 \
   --ansi)
 
 [ -z "$SELECTED_PR" ] && ui_cancel && exit 0
@@ -95,7 +96,8 @@ SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Analysis model ($CURRENT_PROVIDER)  " \
   --header="Model used to analyze the code — runs the 3-pass review for each analysis type" \
   --height=50% \
-  --border=rounded)
+  --border=rounded
+  --margin=0,1,0,1)
 
 [ -z "$SELECTED_ANALYSIS_MODEL" ] && ui_cancel && exit 0
 
@@ -106,22 +108,25 @@ else
   ANALYSIS_MODEL_LABEL="${MODEL:-default}"
 fi
 
-ANALYSES_RAW=$(ui_print "Architecture
-Security
-Code Quality
-Test Coverage
-Performance
-Bugs
-Fix Validation
-Spelling & Grammar
-All" | fzf \
+ANALYSES_RAW=$(ui_print "Architecture  (separation of concerns, SOLID, coupling)
+Security  (secrets, injection risks, auth bypasses)
+Code Quality  (duplication, naming, complexity, error handling)
+Test Coverage  (missing tests, edge cases, untested logic)
+Performance  (N+1 queries, inefficient loops, blocking ops)
+Bugs  (null dereferences, race conditions, logic errors)
+Spelling & Grammar  (typos, accents, grammar in strings)
+All  (runs all analyses above)
+Fix Validation  (validates fixes from existing PR comments)" | fzf \
   --multi \
   --prompt="  Analyses (Tab to select)  " \
   --header="Select one or more analysis types — Enter to confirm" \
   --height=50% \
-  --border=rounded)
+  --border=rounded
+  --margin=0,1,0,1)
 
 [ -z "$ANALYSES_RAW" ] && ui_cancel && exit 0
+
+ANALYSES_RAW=$(ui_print "$ANALYSES_RAW" | sed 's/[[:space:]]*([^)]*)//')
 
 if ui_print "$ANALYSES_RAW" | grep -q "^All$"; then
   ANALYSES_RAW="Architecture
@@ -130,8 +135,8 @@ Code Quality
 Test Coverage
 Performance
 Bugs
-Fix Validation
-Spelling & Grammar"
+Spelling & Grammar
+Fix Validation"
 fi
 
 ui_panel \
@@ -267,7 +272,7 @@ _get_analysis_icon() {
     "Security")           ui_print_raw '🔒' ;;
     "Code Quality")       ui_print_raw '💎' ;;
     "Test Coverage")      ui_print_raw '🧪' ;;
-    "Performance")        ui_print_raw '⚡' ;;
+    "Performance")        ui_print_raw '🚀' ;;
     "Bugs")               ui_print_raw '🐛' ;;
     "Fix Validation")     ui_print_raw '🔧' ;;
     "Spelling & Grammar") ui_print_raw '📝' ;;
@@ -417,7 +422,7 @@ ANALYSIS_PIDS=()
 ANALYSIS_EXIT_CODES=()
 
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_panel "⚙️  Running ${TOTAL_ANALYSES} analyses in parallel  ⏳"
+ui_panel "🛠  Running ${TOTAL_ANALYSES} analyses in parallel  🕐"
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
@@ -533,7 +538,8 @@ SELECTED_COMMENT_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Comment generation model ($CURRENT_PROVIDER)  " \
   --header="Model used to write PR comments for each issue found — can differ from the analysis model" \
   --height=50% \
-  --border=rounded)
+  --border=rounded
+  --margin=0,1,0,1)
 
 [ -z "$SELECTED_COMMENT_MODEL" ] && ui_cancel && exit 0
 
@@ -548,7 +554,8 @@ ES — Spanish" | fzf \
   --prompt="  Comment language  " \
   --header="Select the language for PR comments" \
   --height=20% \
-  --border=rounded)
+  --border=rounded \
+  --margin=0,1,0,1)
 
 [ -z "$LANG_CHOICE" ] && ui_cancel && exit 0
 

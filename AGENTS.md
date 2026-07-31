@@ -411,9 +411,31 @@ refactor/refactor-description
 bash -n script.sh
 ```
 
-### No Emojis
+### No Emojis in Generated Content
 
-❌ **Never add emojis to code or output** (UI functions excluded)
+❌ **Never add emojis to AI-generated output** (commit messages, branch names, PR comments)
+
+✅ **Emojis are allowed only in UI layer** (`lib/ui.sh` functions and `ui_header` calls)
+
+### Emoji Color Rule
+
+**Only use 4-byte UTF-8 emojis (U+1F000 and above). Never use 3-byte emoji characters that may render as monochrome.**
+
+✅ **Always colored (4-byte UTF-8, U+1F000+):**
+```
+🔍 🔒 💎 🧪 🚀 🐛 🔧 📝 🏗️ 🛠️ 🕐 🔄 📝 🌿
+```
+
+❌ **May render monochrome (3-byte UTF-8, avoid):**
+```
+⚡ ⚙️ ⏳ ✍️ ☁️ ♻️  (these are in U+2000-U+2FFF range)
+```
+
+**How to verify:** An emoji is safe if its first UTF-8 byte is `F0` (4-byte sequence).
+```bash
+printf '%s' "🚀" | od -A n -t x1 | head -1  # shows: f0 9f 9a 80  ← safe
+printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
+```
 
 ### File State Management
 
@@ -613,7 +635,7 @@ When adding features, update:
 4. ✅ Always validate bash syntax (`bash -n script.sh`)
 5. ✅ Handle cancellation (exit 130)
 6. ✅ Parallelize independent operations when possible
-7. ✅ No emojis in code
+7. ✅ Only use 4-byte UTF-8 emojis (U+1F000+) in UI layer — never 3-byte (monochrome risk)
 8. ✅ Follow exit code conventions (0, 1, 130)
 
 **When in doubt:**
