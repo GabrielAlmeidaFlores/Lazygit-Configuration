@@ -417,7 +417,7 @@ run_analysis() {
     local PROMPT="$1"
     _AI_STATUS="" _AI_ISSUES=""
     local RESPONSE EXIT_CODE
-    RESPONSE=$(generative_ia "$PROMPT" 1)
+    RESPONSE=$(generative_ia "$PROMPT" 0)
     EXIT_CODE=$?
     [ $EXIT_CODE -eq 130 ] && return 130
     [ $EXIT_CODE -ne 0 ] || [ -z "$RESPONSE" ] && _AI_STATUS="ERROR" && return 1
@@ -442,7 +442,7 @@ run_analysis() {
   }
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "🔍  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3" >&2
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -454,7 +454,6 @@ run_analysis() {
     "__INSTRUCTIONS__"       "$INSTRUCTIONS")
 
   _ai_call "$P1_PROMPT"
-  ui_spinner_stop
   local P1_EC=$?
   [ $P1_EC -eq 130 ] && return 130
   [ $P1_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
@@ -464,7 +463,7 @@ run_analysis() {
 ${P1_ISSUES}"
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "👁  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3" >&2
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -477,7 +476,6 @@ ${P1_ISSUES}"
     "__PASS1_RESULT__"       "$P1_RESULT")
 
   _ai_call "$P2_PROMPT"
-  ui_spinner_stop
   local P2_EC=$?
   [ $P2_EC -eq 130 ] && return 130
   [ $P2_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
@@ -489,7 +487,7 @@ $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "🛡️  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3" >&2
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -502,7 +500,6 @@ $P2_ISSUES" \
     "__COMBINED_ISSUES__"    "$COMBINED_ISSUES")
 
   _ai_call "$P3_PROMPT"
-  ui_spinner_stop
   local P3_EC=$?
   [ $P3_EC -eq 130 ] && return 130
 
@@ -530,7 +527,7 @@ ANALYSIS_PIDS=()
 ANALYSIS_EXIT_CODES=()
 
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_panel "🛠  Running ${TOTAL_ANALYSES} analyses in parallel  🕐"
+ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
