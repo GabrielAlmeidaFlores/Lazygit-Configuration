@@ -66,7 +66,7 @@ PR_TITLE=$(ui_print "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
 CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
 
-DEFAULT_CURSOR_MODELS="default  (use MODEL from config.env)
+DEFAULT_CURSOR_MODELS="default
 gpt-4o-mini  (low — fast and economical)
 gpt-4o  (medium — balanced)
 gpt-4.1  (medium — balanced)
@@ -76,7 +76,7 @@ claude-4-5  (medium-high — latest sonnet)
 claude-4-opus  (high — premium quality)
 o3  (high — deep reasoning)"
 
-DEFAULT_COPILOT_MODELS="default  (use MODEL from config.env)
+DEFAULT_COPILOT_MODELS="default
 gemini-3.1-pro-preview  (medium — fast and capable)
 claude-sonnet-4.5  (medium — balanced quality)
 claude-sonnet-4.6  (medium-high — latest sonnet)
@@ -84,11 +84,11 @@ gpt-5.3-codex  (high — advanced coding)
 claude-opus-4.6  (high — premium quality)"
 
 if [ "$CURRENT_PROVIDER" = "cursor" ]; then
-  MODEL_LIST="${CURSOR_MODELS:+default  (use MODEL from config.env)
+  MODEL_LIST="${CURSOR_MODELS:+default
 $(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
 else
-  MODEL_LIST="${COPILOT_MODELS:+default  (use MODEL from config.env)
+  MODEL_LIST="${COPILOT_MODELS:+default
 $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
 fi
