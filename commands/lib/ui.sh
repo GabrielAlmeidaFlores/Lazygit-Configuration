@@ -295,13 +295,27 @@ ui_checklist_start() {
 
 # ui_checklist_item "text"
 # Renders a single [ ] item row inside a checklist box.
+# Long items are word-wrapped; continuation lines are indented to align
+# with the text start (after the "[ ] " prefix).
 ui_checklist_item() {
   local TEXT="$1"
-  local MAX=$((_IW - 4))
-  [ ${#TEXT} -gt $MAX ] && TEXT="${TEXT:0:$((MAX-3))}..."
-  local PAD=$((_IW - 4 - ${#TEXT}))
-  [ $PAD -lt 0 ] && PAD=0
-  printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$TEXT" ""
+  local FIRST_W=$((_IW - 4))
+  local CONT_W=$((_IW - 5))
+  [ $FIRST_W -lt 4 ] && FIRST_W=4
+  [ $CONT_W  -lt 4 ] && CONT_W=4
+  local IS_FIRST=1
+  printf '%s' "$TEXT" | fold -s -w $FIRST_W | while IFS= read -r CHUNK; do
+    if [ "$IS_FIRST" = "1" ]; then
+      local PAD=$(($FIRST_W - ${#CHUNK}))
+      [ $PAD -lt 0 ] && PAD=0
+      printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$CHUNK" ""
+      IS_FIRST=0
+    else
+      local PAD=$(($CONT_W - ${#CHUNK}))
+      [ $PAD -lt 0 ] && PAD=0
+      printf "  │       %s%${PAD}s  │\n" "$CHUNK" ""
+    fi
+  done
 }
 
 # ui_checklist_end
