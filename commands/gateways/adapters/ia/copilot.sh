@@ -69,11 +69,7 @@ _generative_ia_copilot() {
     local ATTEMPT=1
 
     while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
-      if [ "$VERBOSE" = "1" ]; then
-        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
-      else
-        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
-      fi
+      _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
       _AI_PID=$!
       wait "$_AI_PID"
       local EXIT_CODE=$?
@@ -82,7 +78,9 @@ _generative_ia_copilot() {
       [ $_CANCELLED -eq 1 ] && break
 
       local RESPONSE
-      RESPONSE=$(cat "$_TEMP_OUT")
+      RESPONSE=$(grep -vE '^(Changes[[:space:]]|AI Credits[[:space:]]|Tokens[[:space:]]|Resume[[:space:]]+copilot)' "$_TEMP_OUT" \
+        | sed -e 's/[[:space:]]*$//' \
+        | awk 'NF{last=NR} {lines[NR]=$0} END{for(i=1;i<=last;i++) print lines[i]}')
 
       if [ $EXIT_CODE -eq 0 ] && [ -n "$RESPONSE" ]; then
         rm -f "$_TEMP_OUT"
