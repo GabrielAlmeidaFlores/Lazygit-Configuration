@@ -457,8 +457,9 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   case "$STATUS" in
     OK)
       if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ -f "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" ]; then
-        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || ui_print "0")
-        if [ "$RESOLVED_COUNT" -gt 0 ]; then
+        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || printf '0')
+        RESOLVED_COUNT=$(printf '%s' "$RESOLVED_COUNT" | tr -d '\n\r ')
+        if [ -n "$RESOLVED_COUNT" ] && [ "$RESOLVED_COUNT" -gt 0 ] 2>/dev/null; then
           ui_table_row "$ANALYSIS_NAME" "${RESOLVED_COUNT} fix(es) validated" "ok"
         else
           ui_table_row "$ANALYSIS_NAME" "no fixes to validate" "ok"
@@ -468,7 +469,8 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
       fi
       ;;
     ISSUES_FOUND)
-      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || ui_print "0")
+      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || printf '0')
+      COUNT=$(printf '%s' "$COUNT" | tr -d '\n\r ')
       ui_table_row "$ANALYSIS_NAME" "${COUNT} issue(s) found" "warn" ;;
     *)            ui_table_row "$ANALYSIS_NAME" "analysis failed"  "error" ;;
   esac
@@ -476,31 +478,35 @@ done
 ui_table_end
 
 if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
-  ui_step "Resolving fixed comments on GitHub..."
+  RESOLVED_COMMENTS=$(cat "$RESULTS_DIR/Fix_Validation.resolved_comments" 2>/dev/null)
   
-  RESOLVED_COMMENTS=$(cat "$RESULTS_DIR/Fix_Validation.resolved_comments" 2>/dev/null || ui_print "")
-  RESOLVED_COUNT=0
-  
-  while IFS= read -r ISSUE_LINE; do
-    if ui_print "$ISSUE_LINE" | grep -q "FIXED"; then
-      COMMENT_TEXT=$(ui_print "$ISSUE_LINE" | sed 's/.*FIXED - //' | sed 's/ Evidence:.*//')
-      
-      while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
-        if ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
-          if gh_run api "repos/{owner}/{repo}/pulls/comments/${COMMENT_ID}/replies" \
-              --method POST \
-              --field body="✅ Fixed and validated by AI analysis" \
-              >/dev/null 2>&1; then
-            RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
-          fi
-          break
+  if [ -n "$RESOLVED_COMMENTS" ] && ui_print "$RESOLVED_COMMENTS" | grep -q "FIXED"; then
+    ui_step "Resolving fixed comments on GitHub..."
+    RESOLVED_COUNT=0
+    
+    while IFS= read -r ISSUE_LINE; do
+      if ui_print "$ISSUE_LINE" | grep -q "FIXED"; then
+        COMMENT_TEXT=$(ui_print "$ISSUE_LINE" | sed 's/.*FIXED - //' | sed 's/ Evidence:.*//')
+        
+        if [ -n "$COMMENT_TEXT" ] && [ -n "$PR_COMMENTS_WITH_IDS" ]; then
+          while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
+            if [ -n "$COMMENT_ID" ] && ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
+              if gh_run api "repos/{owner}/{repo}/pulls/comments/${COMMENT_ID}/replies" \
+                  --method POST \
+                  --field body="✅ Fixed and validated by AI analysis" \
+                  >/dev/null 2>&1; then
+                RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
+              fi
+              break
+            fi
+          done <<< "$PR_COMMENTS_WITH_IDS"
         fi
-      done <<< "$PR_COMMENTS_WITH_IDS"
+      fi
+    done <<< "$RESOLVED_COMMENTS"
+    
+    if [ $RESOLVED_COUNT -gt 0 ]; then
+      ui_success "Marked ${RESOLVED_COUNT} comment(s) as resolved"
     fi
-  done <<< "$RESOLVED_COMMENTS"
-  
-  if [ $RESOLVED_COUNT -gt 0 ]; then
-    ui_success "Marked ${RESOLVED_COUNT} comment(s) as resolved"
   fi
 fi
 
