@@ -118,12 +118,50 @@ ui_panel() {
 # ui_section "Title"
 # Renders an inline section separator: "  ──  Title  ──────────────"
 ui_section() {
-  local LABEL="$*"
+   local LABEL="$*"
   local DASHES=$((_W - ${#LABEL} - 8))
   [ $DASHES -lt 2 ] && DASHES=2
   echo ""
   printf "  ${_CB}──  %s${_C0}  %s\n" "$LABEL" "$(_rep $DASHES '─')"
   echo ""
+}
+
+_SPINNER_PID=""
+
+# ui_spinner_start "message"
+# Starts a background animated spinner on /dev/tty writing the given message.
+# The spinner animates using braille frames (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) at 100ms intervals,
+# overwriting the same terminal line with \r. Designed for sequential blocking
+# operations where only one spinner runs at a time. Falls back to a static
+# ui_step when /dev/tty is unavailable.
+ui_spinner_start() {
+  [ -n "$_SPINNER_PID" ] && return 0
+  ( printf "" >/dev/tty ) 2>/dev/null || { ui_step "$1"; return 0; }
+  local MSG="$1"
+  local FRAMES="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+  (
+    local I=0
+    while true; do
+      local F="${FRAMES:$I:1}"
+      ( printf "\r  ${_CC}%s${_C0}  %s  " "$F" "$MSG" >/dev/tty ) 2>/dev/null
+      I=$(( (I + 1) % 10 ))
+      sleep 0.1
+    done
+  ) &
+  _SPINNER_PID=$!
+}
+
+# ui_spinner_stop
+# Kills the running spinner process, clears the spinner line, and resets the PID.
+# disown removes the job from bash's tracking table before killing so bash never
+# prints a "Terminated" job-control notice to the terminal.
+ui_spinner_stop() {
+  if [ -n "$_SPINNER_PID" ]; then
+    disown "$_SPINNER_PID" 2>/dev/null
+    kill "$_SPINNER_PID" 2>/dev/null
+    ( printf "\r\033[2K" >/dev/tty ) 2>/dev/null
+    _SPINNER_PID=""
+  fi
 }
 
 # ui_stacktrace "TITLE" ["DETAIL" ...]

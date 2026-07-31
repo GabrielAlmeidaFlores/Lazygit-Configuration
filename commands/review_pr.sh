@@ -39,9 +39,9 @@ render_template() {
 }
 
 ui_header "🔍  AI PR Review"
-ui_step "Fetching open PRs..."
-
+ui_spinner_start "Fetching open PRs..."
 PR_JSON=$(scm_pr_list 2>/dev/null)
+ui_spinner_stop
 
 if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   ui_error "No open PRs found in this repository."
@@ -146,8 +146,7 @@ ui_panel \
   "PR #${PR_NUMBER}  ·  ${PR_TITLE}" \
   "Analysis model: ${ANALYSIS_MODEL_LABEL}  ·  Provider: ${CURRENT_PROVIDER}"
 
-ui_step "Fetching PR data..."
-
+ui_spinner_start "Fetching PR data..."
 PR_INFO=$(scm_pr_view "$PR_NUMBER" 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
@@ -162,9 +161,11 @@ PR_DELETIONS=$(ui_print "$PR_INFO" | jq -r '.deletions')
 PR_FILES=$(ui_print "$PR_INFO" | jq -r '.changedFiles')
 PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(scm_pr_diff "$PR_NUMBER" 2>/dev/null)
+ui_spinner_stop
 
-ui_step "Fetching existing PR comments..."
+ui_spinner_start "Fetching existing PR comments..."
 scm_pr_get_comments "$PR_NUMBER"
+ui_spinner_stop
 PR_COMMENTS_RAW="${SCM_INLINE_COMMENTS_RAW:-[]}"
 PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login // .author)] \(.path // ""):\(.line // "") - \(.body // .content)"' 2>/dev/null || ui_print "")
 PR_REVIEW_COMMENTS="${SCM_REVIEW_COMMENTS:-}"
@@ -440,7 +441,8 @@ run_analysis() {
     fi
   }
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🔍  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_spinner_start "🔍  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -452,6 +454,7 @@ run_analysis() {
     "__INSTRUCTIONS__"       "$INSTRUCTIONS")
 
   _ai_call "$P1_PROMPT"
+  ui_spinner_stop
   local P1_EC=$?
   [ $P1_EC -eq 130 ] && return 130
   [ $P1_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
@@ -460,7 +463,8 @@ run_analysis() {
   [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
 ${P1_ISSUES}"
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "👁  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_spinner_start "👁  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -473,6 +477,7 @@ ${P1_ISSUES}"
     "__PASS1_RESULT__"       "$P1_RESULT")
 
   _ai_call "$P2_PROMPT"
+  ui_spinner_stop
   local P2_EC=$?
   [ $P2_EC -eq 130 ] && return 130
   [ $P2_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
@@ -483,7 +488,8 @@ ${P1_ISSUES}"
 $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🛡️  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_spinner_start "🛡️  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -496,6 +502,7 @@ $P2_ISSUES" \
     "__COMBINED_ISSUES__"    "$COMBINED_ISSUES")
 
   _ai_call "$P3_PROMPT"
+  ui_spinner_stop
   local P3_EC=$?
   [ $P3_EC -eq 130 ] && return 130
 
@@ -735,7 +742,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
       ;;
     generate)
       [ -n "$COMMENT_MODEL" ] && export MODEL="$COMMENT_MODEL"
-      ui_step "Generating comment in ${COMMENT_LANG}..."
+      ui_spinner_start "Generating comment in ${COMMENT_LANG}..."
 
       COMMENT_PROMPT=$(_build_comment_prompt \
         "$ISSUE" "$SNIPPET" "$FILENAME" "$PR_TITLE" "$COMMENT_LANG")
@@ -801,10 +808,11 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 
 if [ ${#AUTO_POST_PIDS[@]} -gt 0 ]; then
-  ui_step "Waiting for ${AUTO_POST_COUNT} background comment(s)..."
+  ui_spinner_start "Waiting for ${AUTO_POST_COUNT} background comment(s)..."
   for pid in "${AUTO_POST_PIDS[@]}"; do
     wait "$pid" 2>/dev/null
   done
+  ui_spinner_stop
   ui_success "Background posting complete."
 fi
 
