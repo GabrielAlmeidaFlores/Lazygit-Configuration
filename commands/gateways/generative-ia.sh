@@ -37,7 +37,9 @@ CONFIG_FILE="$SCRIPT_DIR/../../config.env"
 if [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
 else
-  echo "  WARN  config.env not found at $CONFIG_FILE, using defaults" >&2
+  if command -v ui_warning >/dev/null 2>&1; then
+    ui_warning "config.env not found at $CONFIG_FILE, using defaults" >&2
+  fi
   MAX_RETRIES=2
   TIMEOUT=60
 fi
@@ -46,8 +48,10 @@ PROVIDER="${AI_PROVIDER:-copilot}"
 ADAPTER_FILE="$SCRIPT_DIR/adapters/${PROVIDER}.sh"
 
 if [ ! -f "$ADAPTER_FILE" ]; then
-  echo "  FAIL  Adapter for provider '$PROVIDER' not found at $ADAPTER_FILE" >&2
-  echo "        Supported providers: cursor, copilot" >&2
+  if command -v ui_error >/dev/null 2>&1; then
+    ui_error "Adapter for provider '$PROVIDER' not found at $ADAPTER_FILE" >&2
+    ui_info "Supported providers: cursor, copilot" >&2
+  fi
   exit 1
 fi
 
@@ -72,8 +76,10 @@ generative_ia() {
 
 if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
   if [ $# -eq 0 ]; then
-    echo "Usage: $0 \"prompt\" [verbose]" >&2
-    echo "   or: source $0 && generative_ia \"prompt\" [1]" >&2
+    if command -v ui_error >/dev/null 2>&1; then
+      ui_error "Usage: $0 \"prompt\" [verbose]" >&2
+      ui_info "   or: source $0 && generative_ia \"prompt\" [1]" >&2
+    fi
     exit 1
   fi
   generative_ia "$1" "${2:-0}"

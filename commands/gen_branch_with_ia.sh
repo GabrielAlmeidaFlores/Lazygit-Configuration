@@ -42,7 +42,7 @@ render_template() {
   while [ $# -ge 2 ]; do
     RESULT="${RESULT//$1/$2}"; shift 2
   done
-  echo "$RESULT"
+  ui_print "$RESULT"
 }
 
 PROMPT=$(render_template "$PROMPT_BRANCH_TEMPLATE" \
@@ -56,11 +56,11 @@ EXIT_CODE=$?
 [ $EXIT_CODE -eq 130 ] && exit 0
 [ $EXIT_CODE -ne 0 ] && ui_error "Failed to get AI response." && exit 1
 
-CLEAN_NAME=$(echo "$RAW_NAME" | grep -oE '(feat|fix|chore|refactor|docs|test|ci|hotfix)/[a-z0-9][a-z0-9-]*' | head -n1)
-[ -z "$CLEAN_NAME" ] && CLEAN_NAME=$(echo "$RAW_NAME" | tr -d '`()[]{}!@#$%^&*+=|\\<>?,;:'"'"'"' | grep -oE '[a-z0-9/][a-z0-9/_-]*' | tail -n1)
+CLEAN_NAME=$(ui_print "$RAW_NAME" | grep -oE '(feat|fix|chore|refactor|docs|test|ci|hotfix)/[a-z0-9][a-z0-9-]*' | head -n1)
+[ -z "$CLEAN_NAME" ] && CLEAN_NAME=$(ui_print "$RAW_NAME" | tr -d '`()[]{}!@#$%^&*+=|\\<>?,;:'"'"'"' | grep -oE '[a-z0-9/][a-z0-9/_-]*' | tail -n1)
 
 TEMP_FILE=$(mktemp)
-echo "$CLEAN_NAME" > "$TEMP_FILE"
+ui_print "$CLEAN_NAME" > "$TEMP_FILE"
 
 while true; do
   FINAL_NAME=$(cat "$TEMP_FILE")

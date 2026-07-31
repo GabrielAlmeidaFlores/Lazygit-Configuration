@@ -345,3 +345,11 @@ ui_prompt_review() {
     *)    UI_ACTION="skip" ;;
   esac
 }
+
+ui_print() {
+  printf '%s\n' "$1"
+}
+
+ui_print_raw() {
+  printf '%s' "$1"
+}

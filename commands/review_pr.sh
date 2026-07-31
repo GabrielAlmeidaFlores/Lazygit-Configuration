@@ -26,7 +26,7 @@ _GH_PAT=""
 _resolve_gh_auth() {
   local REMOTE_URL PAT
   REMOTE_URL=$(git remote get-url origin 2>/dev/null)
-  PAT=$(echo "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
+  PAT=$(ui_print "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
   if [ -n "$PAT" ]; then
     _GH_PAT="$PAT"
     return 0
@@ -69,7 +69,7 @@ render_template() {
   while [ $# -ge 2 ]; do
     RESULT="${RESULT//$1/$2}"; shift 2
   done
-  echo "$RESULT"
+  ui_print "$RESULT"
 }
 
 ui_header "AI PR Review"
@@ -82,9 +82,9 @@ if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   exit 0
 fi
 
-PR_LIST=$(echo "$PR_JSON" | jq -r '.[] | "#\(.number)  \(.title)  [\(.author.login) → \(.headRefName)]"')
+PR_LIST=$(ui_print "$PR_JSON" | jq -r '.[] | "#\(.number)  \(.title)  [\(.author.login) → \(.headRefName)]"')
 
-SELECTED_PR=$(echo "$PR_LIST" | fzf \
+SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
   --prompt="  Select PR  " \
   --header="Open PRs — Enter to select, Ctrl+C to exit" \
   --height=50% \
@@ -93,8 +93,8 @@ SELECTED_PR=$(echo "$PR_LIST" | fzf \
 
 [ -z "$SELECTED_PR" ] && ui_cancel && exit 0
 
-PR_NUMBER=$(echo "$SELECTED_PR" | grep -oE '^#[0-9]+' | tr -d '#')
-PR_TITLE=$(echo "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
+PR_NUMBER=$(ui_print "$SELECTED_PR" | grep -oE '^#[0-9]+' | tr -d '#')
+PR_TITLE=$(ui_print "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
 CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
 
@@ -116,15 +116,15 @@ gemini-3.1-pro-preview"
 
 if [ "$CURRENT_PROVIDER" = "cursor" ]; then
   MODEL_LIST="${CURSOR_MODELS:+default
-$(echo "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+$(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
 else
   MODEL_LIST="${COPILOT_MODELS:+default
-$(echo "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+$(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
 fi
 
-SELECTED_MODEL=$(echo "$MODEL_LIST" | fzf \
+SELECTED_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Model ($CURRENT_PROVIDER)  " \
   --header="AI model for this session — Enter to confirm" \
   --height=50% \
@@ -139,7 +139,15 @@ else
   MODEL_LABEL="${MODEL:-default}"
 fi
 
-ANALYSES_RAW=$(printf "Architecture\nSecurity\nCode Quality\nTest Coverage\nPerformance\nAll" | fzf \
+ANALYSES_RAW=$(ui_print "Architecture
+Security
+Code Quality
+Test Coverage
+Performance
+Bugs
+Fix Validation
+Spelling & Grammar
+All" | fzf \
   --multi \
   --prompt="  Analyses (Tab to select)  " \
   --header="Select one or more analysis types — Enter to confirm" \
@@ -148,12 +156,15 @@ ANALYSES_RAW=$(printf "Architecture\nSecurity\nCode Quality\nTest Coverage\nPerf
 
 [ -z "$ANALYSES_RAW" ] && ui_cancel && exit 0
 
-if echo "$ANALYSES_RAW" | grep -q "^All$"; then
+if ui_print "$ANALYSES_RAW" | grep -q "^All$"; then
   ANALYSES_RAW="Architecture
 Security
 Code Quality
 Test Coverage
-Performance"
+Performance
+Bugs
+Fix Validation
+Spelling & Grammar"
 fi
 
 ui_panel \
@@ -169,13 +180,33 @@ if [ -z "$PR_INFO" ]; then
   exit 1
 fi
 
-PR_BODY=$(echo "$PR_INFO" | jq -r '.body // "No description provided."')
-PR_AUTHOR=$(echo "$PR_INFO" | jq -r '.author.login')
-PR_ADDITIONS=$(echo "$PR_INFO" | jq -r '.additions')
-PR_DELETIONS=$(echo "$PR_INFO" | jq -r '.deletions')
-PR_FILES=$(echo "$PR_INFO" | jq -r '.changedFiles')
-PR_COMMIT=$(echo "$PR_INFO" | jq -r '.headRefOid')
+PR_BODY=$(ui_print "$PR_INFO" | jq -r '.body // "No description provided."')
+PR_AUTHOR=$(ui_print "$PR_INFO" | jq -r '.author.login')
+PR_ADDITIONS=$(ui_print "$PR_INFO" | jq -r '.additions')
+PR_DELETIONS=$(ui_print "$PR_INFO" | jq -r '.deletions')
+PR_FILES=$(ui_print "$PR_INFO" | jq -r '.changedFiles')
+PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(gh_run pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
+
+ui_step "Fetching existing PR comments..."
+PR_COMMENTS_RAW=$(gh_run api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments" 2>/dev/null || ui_print "[]")
+PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
+PR_REVIEW_COMMENTS=$(gh_run pr view "$PR_NUMBER" --json comments --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
+
+PR_COMMENTS_WITH_IDS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "\(.id)|[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
+
+EXISTING_COMMENTS=""
+if [ -n "$PR_COMMENTS" ] || [ -n "$PR_REVIEW_COMMENTS" ]; then
+  EXISTING_COMMENTS="EXISTING COMMENTS ON THIS PR:
+
+Inline Comments:
+${PR_COMMENTS:-None}
+
+General Comments:
+${PR_REVIEW_COMMENTS:-None}
+
+DO NOT report issues that have already been mentioned in the comments above."
+fi
 
 ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
 
@@ -184,7 +215,7 @@ ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
 # Prints "file/path.ext:line_number" on success, nothing if not found.
 get_diff_location() {
   local FILENAME="$1" DIFF="$2"
-  echo "$DIFF" | awk -v fn="$FILENAME" '
+  ui_print "$DIFF" | awk -v fn="$FILENAME" '
     $0 ~ ("\\+\\+\\+ b/.*" fn) {
       file_path = substr($0, 7)
       in_file = 1; current_line = 0; next
@@ -218,13 +249,13 @@ post_review_comment() {
         --field line="$LINE" \
         --field side="RIGHT" \
         >/dev/null 2>&1; then
-      echo "inline"
+      ui_print "inline"
       return 0
     fi
   fi
 
   if gh_run pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
-    echo "general"
+    ui_print "general"
     return 0
   fi
 
@@ -241,11 +272,14 @@ ANALYSES_ORDER=()
 # config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
-    "Architecture")  echo "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
-    "Security")      echo "${PROMPT_INSTRUCTIONS_SECURITY:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
-    "Code Quality")  echo "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
-    "Test Coverage") echo "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
-    "Performance")   echo "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
+    "Architecture")         ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
+    "Security")             ui_print "${PROMPT_INSTRUCTIONS_SECURITY:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
+    "Code Quality")         ui_print "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
+    "Test Coverage")        ui_print "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
+    "Performance")          ui_print "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
+    "Bugs")                 ui_print "${PROMPT_INSTRUCTIONS_BUGS:-Check for potential bugs: null dereferences, off-by-one errors, race conditions, incorrect logic, resource leaks.}" ;;
+    "Fix Validation")       ui_print "${PROMPT_INSTRUCTIONS_FIX_VALIDATION:-Review existing PR comments requesting fixes and validate if they have been addressed in the current diff.}" ;;
+    "Spelling & Grammar")   ui_print "${PROMPT_INSTRUCTIONS_SPELLING:-Detect language and check for spelling mistakes, typos, missing accents in Portuguese/Spanish, grammatical errors in comments and strings.}" ;;
   esac
 }
 
@@ -254,8 +288,8 @@ get_instructions() {
 #   Pass 1 — initial analysis of the diff
 #   Pass 2 — second analysis informed by Pass 1 findings
 #   Pass 3 — validates the deduplicated combined issues from passes 1 and 2
-# Writes ANALYSIS_STATUS and issues from Pass 3 to $RESULTS_DIR.
-# Appends confirmed issues to ALL_ISSUES. Returns 130 on cancellation, 1 on failure.
+# Writes ANALYSIS_STATUS and issues to $RESULTS_DIR files.
+# Returns 130 on cancellation, 1 on failure.
 run_analysis() {
   local ANALYSIS_NAME="$1"
   local INSTRUCTIONS="$2"
@@ -273,39 +307,40 @@ run_analysis() {
     [ $EXIT_CODE -eq 130 ] && return 130
     [ $EXIT_CODE -ne 0 ] || [ -z "$RESPONSE" ] && _AI_STATUS="ERROR" && return 1
 
-    _AI_STATUS=$(echo "$RESPONSE" | grep -i "^[[:space:]]*ANALYSIS_STATUS:" | head -1 | sed 's/.*ANALYSIS_STATUS:[[:space:]]*//')
+    _AI_STATUS=$(ui_print "$RESPONSE" | grep -i "^[[:space:]]*ANALYSIS_STATUS:" | head -1 | sed 's/.*ANALYSIS_STATUS:[[:space:]]*//')
 
     if [ -z "$_AI_STATUS" ]; then
       local LOWER
-      LOWER=$(echo "$RESPONSE" | tr '[:upper:]' '[:lower:]')
-      if echo "$LOWER" | grep -qE "no .*(issue|problem|violation|concern|finding)|looks good|nothing (found|detected|identified)|no significant|lgtm|clean code|well.written"; then
+      LOWER=$(ui_print "$RESPONSE" | tr '[:upper:]' '[:lower:]')
+      if ui_print "$LOWER" | grep -qE "no .*(issue|problem|violation|concern|finding)|looks good|nothing (found|detected|identified)|no significant|lgtm|clean code|well.written"; then
         _AI_STATUS="OK"
       else
         _AI_STATUS="ISSUES_FOUND"
-        _AI_ISSUES=$(echo "$RESPONSE" | grep -iE "^[-*•]|^ISSUE:|^[0-9]+\." | sed 's/^[-*•[:space:]]*//' | sed 's/^ISSUE:[[:space:]]*//' | grep -v "^$")
+        _AI_ISSUES=$(ui_print "$RESPONSE" | grep -iE "^[-*•]|^ISSUE:|^[0-9]+\." | sed 's/^[-*•[:space:]]*//' | sed 's/^ISSUE:[[:space:]]*//' | grep -v "^$")
         return 0
       fi
     fi
 
     if [ "$_AI_STATUS" = "ISSUES_FOUND" ]; then
-      _AI_ISSUES=$(echo "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
+      _AI_ISSUES=$(ui_print "$RESPONSE" | grep "^ISSUE:" | sed 's/^ISSUE: //')
     fi
   }
 
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS")
 
   _ai_call "$P1_PROMPT"
   local P1_EC=$?
   [ $P1_EC -eq 130 ] && return 130
-  [ $P1_EC -ne 0 ]   && echo "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
+  [ $P1_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P1_STATUS="$_AI_STATUS" P1_ISSUES="$_AI_ISSUES"
   local P1_RESULT="ANALYSIS_STATUS: ${P1_STATUS}"
   [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
@@ -314,34 +349,37 @@ ${P1_ISSUES}"
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
-    "__PASS1_RESULT__"  "$P1_RESULT")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS" \
+    "__PASS1_RESULT__"       "$P1_RESULT")
 
   _ai_call "$P2_PROMPT"
   local P2_EC=$?
   [ $P2_EC -eq 130 ] && return 130
-  [ $P2_EC -ne 0 ]   && echo "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
+  [ $P2_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P2_ISSUES="$_AI_ISSUES"
 
   local COMBINED_ISSUES
-  COMBINED_ISSUES=$(printf "%s\n%s" "$P1_ISSUES" "$P2_ISSUES" \
+  COMBINED_ISSUES=$(ui_print "$P1_ISSUES
+$P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
   ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
-    "__ANALYSIS_NAME__" "$ANALYSIS_NAME" \
-    "__PR_TITLE__"      "$PR_TITLE"      \
-    "__PR_AUTHOR__"     "$PR_AUTHOR"     \
-    "__PR_BODY__"       "$PR_BODY"       \
-    "__PR_DIFF__"       "$PR_DIFF"       \
-    "__INSTRUCTIONS__"  "$INSTRUCTIONS" \
-    "__COMBINED_ISSUES__" "$COMBINED_ISSUES")
+    "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
+    "__PR_TITLE__"           "$PR_TITLE"      \
+    "__PR_AUTHOR__"          "$PR_AUTHOR"     \
+    "__PR_BODY__"            "$PR_BODY"       \
+    "__PR_DIFF__"            "$PR_DIFF"       \
+    "__EXISTING_COMMENTS__"  "$EXISTING_COMMENTS" \
+    "__INSTRUCTIONS__"       "$INSTRUCTIONS" \
+    "__COMBINED_ISSUES__"    "$COMBINED_ISSUES")
 
   _ai_call "$P3_PROMPT"
   local P3_EC=$?
@@ -356,43 +394,121 @@ ${P1_ISSUES}"
     FINAL_ISSUES="$_AI_ISSUES"
   fi
 
-  echo "$FINAL_STATUS" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
+  ui_print "$FINAL_STATUS" > "$RESULTS_DIR/${ANALYSIS_KEY}.status"
 
   if [ "$FINAL_STATUS" = "ISSUES_FOUND" ] && [ -n "$FINAL_ISSUES" ]; then
-    echo "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
-    while IFS= read -r ISSUE_LINE; do
-      [ -n "$ISSUE_LINE" ] && ALL_ISSUES+=("[$ANALYSIS_NAME] $ISSUE_LINE")
-    done <<< "$FINAL_ISSUES"
+    ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
+  fi
+  
+  if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ "$FINAL_STATUS" = "OK" ]; then
+    ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments"
   fi
 }
 
+ANALYSIS_PIDS=()
+ANALYSIS_EXIT_CODES=()
+
+TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
+ui_info "Running ${TOTAL_ANALYSES} analysis in parallel..."
+
+ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
   [ -z "$ANALYSIS" ] && continue
   ANALYSES_ORDER+=("$ANALYSIS")
   INSTRUCTIONS=$(get_instructions "$ANALYSIS")
-  run_analysis "$ANALYSIS" "$INSTRUCTIONS"
-  RESULT=$?
-  if [ $RESULT -eq 130 ]; then
+  
+  (
+    run_analysis "$ANALYSIS" "$INSTRUCTIONS"
+    exit $?
+  ) &
+  
+  ANALYSIS_PIDS[$ANALYSIS_INDEX]=$!
+  ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
+done <<< "$ANALYSES_RAW"
+
+for i in "${!ANALYSIS_PIDS[@]}"; do
+  wait "${ANALYSIS_PIDS[$i]}"
+  ANALYSIS_EXIT_CODES[$i]=$?
+done
+
+for EXIT_CODE in "${ANALYSIS_EXIT_CODES[@]}"; do
+  if [ $EXIT_CODE -eq 130 ]; then
     ui_cancel
     exit 0
   fi
-done <<< "$ANALYSES_RAW"
+done
+
+for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
+  ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
+  ISSUES_FILE="$RESULTS_DIR/${ANALYSIS_KEY}.issues"
+  if [ -f "$ISSUES_FILE" ]; then
+    while IFS= read -r ISSUE_LINE; do
+      [ -n "$ISSUE_LINE" ] && ALL_ISSUES+=("[$ANALYSIS_NAME] $ISSUE_LINE")
+    done < "$ISSUES_FILE"
+  fi
+done
 
 ui_section "Results  —  PR #${PR_NUMBER}"
 
 ui_table_start
 for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
-  STATUS=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.status" 2>/dev/null || echo "ERROR")
+  STATUS=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.status" 2>/dev/null || ui_print "ERROR")
   case "$STATUS" in
-    OK)           ui_table_row "$ANALYSIS_NAME" "no issues"       "ok" ;;
+    OK)
+      if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ -f "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" ]; then
+        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || printf '0')
+        RESOLVED_COUNT=$(printf '%s' "$RESOLVED_COUNT" | tr -d '\n\r ')
+        if [ -n "$RESOLVED_COUNT" ] && [ "$RESOLVED_COUNT" -gt 0 ] 2>/dev/null; then
+          ui_table_row "$ANALYSIS_NAME" "${RESOLVED_COUNT} fix(es) validated" "ok"
+        else
+          ui_table_row "$ANALYSIS_NAME" "no fixes to validate" "ok"
+        fi
+      else
+        ui_table_row "$ANALYSIS_NAME" "no issues" "ok"
+      fi
+      ;;
     ISSUES_FOUND)
-      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || echo 0)
+      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || printf '0')
+      COUNT=$(printf '%s' "$COUNT" | tr -d '\n\r ')
       ui_table_row "$ANALYSIS_NAME" "${COUNT} issue(s) found" "warn" ;;
     *)            ui_table_row "$ANALYSIS_NAME" "analysis failed"  "error" ;;
   esac
 done
 ui_table_end
+
+if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
+  RESOLVED_COMMENTS=$(cat "$RESULTS_DIR/Fix_Validation.resolved_comments" 2>/dev/null)
+  
+  if [ -n "$RESOLVED_COMMENTS" ] && ui_print "$RESOLVED_COMMENTS" | grep -q "FIXED"; then
+    ui_step "Resolving fixed comments on GitHub..."
+    RESOLVED_COUNT=0
+    
+    while IFS= read -r ISSUE_LINE; do
+      if ui_print "$ISSUE_LINE" | grep -q "FIXED"; then
+        COMMENT_TEXT=$(ui_print "$ISSUE_LINE" | sed 's/.*FIXED - //' | sed 's/ Evidence:.*//')
+        
+        if [ -n "$COMMENT_TEXT" ] && [ -n "$PR_COMMENTS_WITH_IDS" ]; then
+          while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
+            if [ -n "$COMMENT_ID" ] && ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
+              if gh_run api "repos/{owner}/{repo}/pulls/comments/${COMMENT_ID}/replies" \
+                  --method POST \
+                  --field body="✅ Fixed and validated by AI analysis" \
+                  >/dev/null 2>&1; then
+                RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
+              fi
+              break
+            fi
+          done <<< "$PR_COMMENTS_WITH_IDS"
+        fi
+      fi
+    done <<< "$RESOLVED_COMMENTS"
+    
+    if [ $RESOLVED_COUNT -gt 0 ]; then
+      ui_success "Marked ${RESOLVED_COUNT} comment(s) as resolved"
+    fi
+  fi
+fi
 
 if [ ${#ALL_ISSUES[@]} -eq 0 ]; then
   ui_success "No issues found. PR looks good!"
@@ -406,7 +522,9 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 ui_checklist_end
 
-LANG_CHOICE=$(printf "PT — Portuguese\nEN — English\nES — Spanish" | fzf \
+LANG_CHOICE=$(ui_print "PT — Portuguese
+EN — English
+ES — Spanish" | fzf \
   --prompt="  Comment language  " \
   --header="Select the language for PR comments" \
   --height=20% \
@@ -431,14 +549,14 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   [ $STOP -eq 1 ] && break
   ISSUE_INDEX=$((ISSUE_INDEX + 1))
 
-  CATEGORY=$(echo "$ISSUE" | sed 's/^\[\([^]]*\)\].*/\1/')
-  TEXT=$(echo "$ISSUE" | sed 's/^\[[^]]*\] //')
+  CATEGORY=$(ui_print "$ISSUE" | sed 's/^\[\([^]]*\)\].*/\1/')
+  TEXT=$(ui_print "$ISSUE" | sed 's/^\[[^]]*\] //')
   PR_CONTEXT="PR #${PR_NUMBER}  ·  ${PR_TITLE}"
 
-  FILENAME=$(echo "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json)' | head -1)
+  FILENAME=$(ui_print "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json)' | head -1)
   SNIPPET=""
   if [ -n "$FILENAME" ]; then
-    SNIPPET=$(echo "$PR_DIFF" | awk -v fn="$FILENAME" '
+    SNIPPET=$(ui_print "$PR_DIFF" | awk -v fn="$FILENAME" '
       $0 ~ ("diff --git.*" fn) { found=1; count=0; next }
       /^diff --git/ && found    { exit }
       found {
@@ -511,7 +629,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
             ;;
           edit)
             TEMP_FILE=$(mktemp /tmp/pr_comment_XXXXXX.txt)
-            echo "$GENERATED_COMMENT" > "$TEMP_FILE"
+            ui_print "$GENERATED_COMMENT" > "$TEMP_FILE"
             ${EDITOR:-nano} "$TEMP_FILE"
             GENERATED_COMMENT=$(cat "$TEMP_FILE")
             rm -f "$TEMP_FILE"
