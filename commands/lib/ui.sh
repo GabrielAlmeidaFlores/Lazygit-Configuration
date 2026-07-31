@@ -58,7 +58,8 @@ _CB="\033[1m"
 _CD="\033[2m"
 _C0="\033[0m"
 
-_W=60
+_TERM_COLS=$(tput cols 2>/dev/null || echo 80)
+_W=$(( _TERM_COLS > 64 ? _TERM_COLS - 1 : 63 ))
 _IW=$((_W - 8))
 
 _rep() {
@@ -115,12 +116,12 @@ ui_section() {
 
 ui_spacer() { echo ""; }
 
-ui_success() { printf "  ${_CGB}OK${_C0}    %s\n"   "$*"; }
-ui_error()   { printf "  ${_CRB}FAIL${_C0}  %s\n"   "$*"; }
-ui_warning() { printf "  ${_CY}WARN${_C0}  %s\n"    "$*"; }
-ui_info()    { printf "  %s\n"                       "$*"; }
-ui_cancel()  { printf "  ${_CD}Cancelled.${_C0}\n";       }
-ui_step()    { printf "  ${_CC}→${_C0}  %s\n"       "$*"; }
+ui_success() { printf "  ${_CGB}${_C0}  %s\n"  "$*"; }
+ui_error()   { printf "  ${_CRB}${_C0}  %s\n"  "$*"; }
+ui_warning() { printf "  ${_CY}${_C0}  %s\n"   "$*"; }
+ui_info()    { printf "  %s\n"                        "$*"; }
+ui_cancel()  { printf "  ${_CD} Cancelled.${_C0}\n"; }
+ui_step()    { printf "  ${_CC}${_C0}  %s\n"   "$*"; }
 
 # ui_print "text"
 # Prints text followed by a newline. Use instead of echo in all scripts.
@@ -129,6 +130,11 @@ ui_print() { printf '%s\n' "$*"; }
 # ui_print_raw "text"
 # Prints text without a trailing newline.
 ui_print_raw() { printf '%s' "$*"; }
+
+# ui_icon "escape"
+# Outputs a single Nerd Fonts character from a printf escape sequence.
+# Example: ui_icon ''
+ui_icon() { printf "$1"; }
 
 # ui_content_box "Title" "text"
 # Renders a bordered box with a bold title and green-colored content lines.
@@ -140,9 +146,15 @@ ui_content_box() {
   printf "  ╭─  ${_CB}%s${_C0}  %s╮\n" "$TITLE" "$(_rep $DASHES '─')"
   printf "  │%s│\n" "$(_rep $((_W-4)) ' ')"
   while IFS= read -r LINE; do
-    [ ${#LINE} -gt $_IW ] && LINE="${LINE:0:$((_IW-3))}..."
-    local PAD=$((_IW - ${#LINE}))
-    printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$LINE" ""
+    if [ ${#LINE} -gt $_IW ]; then
+      printf '%s\n' "$LINE" | fold -s -w $_IW | while IFS= read -r WRAPPED; do
+        local PAD=$((_IW - ${#WRAPPED}))
+        printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$WRAPPED" ""
+      done
+    else
+      local PAD=$((_IW - ${#LINE}))
+      printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$LINE" ""
+    fi
   done <<< "$CONTENT"
   printf "  │%s│\n" "$(_rep $((_W-4)) ' ')"
   _bot

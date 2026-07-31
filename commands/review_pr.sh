@@ -212,6 +212,22 @@ trap 'rm -rf "$RESULTS_DIR"' EXIT
 ALL_ISSUES=()
 ANALYSES_ORDER=()
 
+# _get_analysis_icon ANALYSIS_NAME
+# Returns a Nerd Fonts icon for the given analysis type.
+_get_analysis_icon() {
+  case "$1" in
+    "Architecture")       ui_icon '' ;;
+    "Security")           ui_icon '' ;;
+    "Code Quality")       ui_icon '' ;;
+    "Test Coverage")      ui_icon '' ;;
+    "Performance")        ui_icon '' ;;
+    "Bugs")               ui_icon '' ;;
+    "Fix Validation")     ui_icon '' ;;
+    "Spelling & Grammar") ui_icon '' ;;
+    *)                    ui_icon '' ;;
+  esac
+}
+
 # get_instructions ANALYSIS_NAME
 # Returns the instruction text for a given analysis type, sourced from
 # config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
@@ -398,26 +414,28 @@ ui_section "Results  —  PR #${PR_NUMBER}"
 ui_table_start
 for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  LABEL="${ICON}  ${ANALYSIS_NAME}"
   STATUS=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.status" 2>/dev/null || ui_print "ERROR")
   case "$STATUS" in
     OK)
       if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ -f "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" ]; then
-        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || printf '0')
-        RESOLVED_COUNT=$(printf '%s' "$RESOLVED_COUNT" | tr -d '\n\r ')
+        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || ui_print_raw '0')
+        RESOLVED_COUNT=$(ui_print_raw "$RESOLVED_COUNT" | tr -d '\n\r ')
         if [ -n "$RESOLVED_COUNT" ] && [ "$RESOLVED_COUNT" -gt 0 ] 2>/dev/null; then
-          ui_table_row "$ANALYSIS_NAME" "${RESOLVED_COUNT} fix(es) validated" "ok"
+          ui_table_row "$LABEL" "${RESOLVED_COUNT} fix(es) validated" "ok"
         else
-          ui_table_row "$ANALYSIS_NAME" "no fixes to validate" "ok"
+          ui_table_row "$LABEL" "no fixes to validate" "ok"
         fi
       else
-        ui_table_row "$ANALYSIS_NAME" "no issues" "ok"
+        ui_table_row "$LABEL" "no issues" "ok"
       fi
       ;;
     ISSUES_FOUND)
-      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || printf '0')
-      COUNT=$(printf '%s' "$COUNT" | tr -d '\n\r ')
-      ui_table_row "$ANALYSIS_NAME" "${COUNT} issue(s) found" "warn" ;;
-    *)  ui_table_row "$ANALYSIS_NAME" "analysis failed" "error" ;;
+      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || ui_print_raw '0')
+      COUNT=$(ui_print_raw "$COUNT" | tr -d '\n\r ')
+      ui_table_row "$LABEL" "${COUNT} issue(s) found" "warn" ;;
+    *)  ui_table_row "$LABEL" "analysis failed" "error" ;;
   esac
 done
 ui_table_end

@@ -19,7 +19,7 @@ _GH_PAT=""
 # Resolves the authentication token for this repository.
 _scm_github_init() {
   local REMOTE_URL="$1" PAT LOCAL_GH_USER TOKEN
-  PAT=$(echo "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
+  PAT=$(ui_print "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
   if [ -n "$PAT" ]; then
     _GH_PAT="$PAT"
     return 0
@@ -65,9 +65,9 @@ _scm_github_pr_diff() {
 # Fetches inline review comments and general PR comments.
 # Sets SCM_INLINE_COMMENTS_RAW (JSON array) and SCM_REVIEW_COMMENTS (text).
 _scm_github_pr_get_comments() {
-  SCM_INLINE_COMMENTS_RAW=$(_gh api "repos/{owner}/{repo}/pulls/$1/comments" 2>/dev/null || echo "[]")
+  SCM_INLINE_COMMENTS_RAW=$(_gh api "repos/{owner}/{repo}/pulls/$1/comments" 2>/dev/null || ui_print "[]")
   SCM_REVIEW_COMMENTS=$(_gh pr view "$1" --json comments \
-    --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || echo "")
+    --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
 }
 
 # _scm_github_pr_comment_reply COMMENT_ID BODY
@@ -81,7 +81,7 @@ _scm_github_pr_comment_reply() {
 # Posts a general comment. Prints "general" on success, returns 1 on failure.
 _scm_github_pr_comment() {
   if _gh pr comment "$1" --body "$2" 2>/dev/null; then
-    echo "general"
+    ui_print "general"
     return 0
   fi
   return 1
@@ -103,13 +103,13 @@ _scm_github_pr_comment_inline() {
         --field line="$LINE" \
         --field side="RIGHT" \
         >/dev/null 2>&1; then
-      echo "inline"
+      ui_print "inline"
       return 0
     fi
   fi
 
   if _gh pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
-    echo "general"
+    ui_print "general"
     return 0
   fi
 

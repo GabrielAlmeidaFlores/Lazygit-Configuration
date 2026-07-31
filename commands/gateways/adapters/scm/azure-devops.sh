@@ -33,22 +33,22 @@ _scm_azure_init() {
   case "$REMOTE_URL" in
     https://dev.azure.com/*|https://*@dev.azure.com/*)
       local STRIPPED
-      STRIPPED=$(echo "$REMOTE_URL" | sed 's|https://[^@]*@||; s|https://||')
-      _AZ_ORG=$(echo "$STRIPPED" | cut -d'/' -f2)
-      _AZ_PROJECT=$(echo "$STRIPPED" | cut -d'/' -f3)
-      _AZ_REPO=$(echo "$STRIPPED" | cut -d'/' -f5)
+      STRIPPED=$(ui_print "$REMOTE_URL" | sed 's|https://[^@]*@||; s|https://||')
+      _AZ_ORG=$(ui_print "$STRIPPED" | cut -d'/' -f2)
+      _AZ_PROJECT=$(ui_print "$STRIPPED" | cut -d'/' -f3)
+      _AZ_REPO=$(ui_print "$STRIPPED" | cut -d'/' -f5)
       ;;
     https://*.visualstudio.com/*)
-      _AZ_ORG=$(echo "$REMOTE_URL" | sed 's|https://\([^.]*\)\.visualstudio\.com.*|\1|')
-      _AZ_PROJECT=$(echo "$REMOTE_URL" | sed 's|.*/\([^/]*\)/_git/.*|\1|')
-      _AZ_REPO=$(echo "$REMOTE_URL" | sed 's|.*/_git/\([^/]*\).*|\1|')
+      _AZ_ORG=$(ui_print "$REMOTE_URL" | sed 's|https://\([^.]*\)\.visualstudio\.com.*|\1|')
+      _AZ_PROJECT=$(ui_print "$REMOTE_URL" | sed 's|.*/\([^/]*\)/_git/.*|\1|')
+      _AZ_REPO=$(ui_print "$REMOTE_URL" | sed 's|.*/_git/\([^/]*\).*|\1|')
       ;;
     git@ssh.dev.azure.com:v3/*)
       local PATH_PART
-      PATH_PART=$(echo "$REMOTE_URL" | sed 's|git@ssh.dev.azure.com:v3/||')
-      _AZ_ORG=$(echo "$PATH_PART" | cut -d'/' -f1)
-      _AZ_PROJECT=$(echo "$PATH_PART" | cut -d'/' -f2)
-      _AZ_REPO=$(echo "$PATH_PART" | cut -d'/' -f3)
+      PATH_PART=$(ui_print "$REMOTE_URL" | sed 's|git@ssh.dev.azure.com:v3/||')
+      _AZ_ORG=$(ui_print "$PATH_PART" | cut -d'/' -f1)
+      _AZ_PROJECT=$(ui_print "$PATH_PART" | cut -d'/' -f2)
+      _AZ_REPO=$(ui_print "$PATH_PART" | cut -d'/' -f3)
       ;;
   esac
 
@@ -66,7 +66,7 @@ _scm_azure_init() {
 # Sets _AZ_TOKEN from AZURE_DEVOPS_PAT or az CLI. Exits on failure.
 _scm_azure_resolve_auth() {
   if [ -n "$AZURE_DEVOPS_PAT" ]; then
-    _AZ_TOKEN=$(printf '%s' ":${AZURE_DEVOPS_PAT}" | base64)
+    _AZ_TOKEN=$(ui_print_raw ":${AZURE_DEVOPS_PAT}" | base64)
     return 0
   fi
 
@@ -93,7 +93,7 @@ _az_curl() {
   local METHOD="$1" URL="$2" BODY="${3:-}"
   local AUTH_HEADER
 
-  if echo "$_AZ_TOKEN" | grep -q "^bearer:"; then
+  if ui_print "$_AZ_TOKEN" | grep -q "^bearer:"; then
     AUTH_HEADER="Authorization: Bearer ${_AZ_TOKEN#bearer:}"
   else
     AUTH_HEADER="Authorization: Basic ${_AZ_TOKEN}"
@@ -117,7 +117,7 @@ _scm_azure_pr_list() {
   RAW=$(_az_curl GET \
     "${_AZ_API_BASE}/pullrequests?api-version=7.1&searchCriteria.status=active")
 
-  echo "$RAW" | jq -r '[.value[] | {
+  ui_print "$RAW" | jq -r '[.value[] | {
     number:      .pullRequestId,
     title:       .title,
     author:      .createdBy.displayName,
@@ -132,7 +132,7 @@ _scm_azure_pr_view() {
   RAW=$(_az_curl GET \
     "${_AZ_API_BASE}/pullrequests/$1?api-version=7.1")
 
-  echo "$RAW" | jq '{
+  ui_print "$RAW" | jq '{
     title:        .title,
     body:         (.description // "No description provided."),
     author:       .createdBy.displayName,
@@ -150,8 +150,8 @@ _scm_azure_pr_view() {
 _scm_azure_pr_diff() {
   local PR_INFO TARGET_REF SOURCE_REF
   PR_INFO=$(scm_pr_view "$1")
-  TARGET_REF=$(echo "$PR_INFO" | jq -r '.targetRef')
-  SOURCE_REF=$(echo "$PR_INFO" | jq -r '.sourceRef')
+  TARGET_REF=$(ui_print "$PR_INFO" | jq -r '.targetRef')
+  SOURCE_REF=$(ui_print "$PR_INFO" | jq -r '.sourceRef')
 
   git fetch --quiet origin \
     "refs/heads/${TARGET_REF}:refs/remotes/origin/${TARGET_REF}" \
@@ -170,9 +170,9 @@ _scm_azure_pr_get_comments() {
   local RAW
   RAW=$(_az_curl GET "${_AZ_API_BASE}/pullrequests/$1/threads?api-version=7.1")
   SCM_INLINE_COMMENTS_RAW="[]"
-  SCM_REVIEW_COMMENTS=$(echo "$RAW" | jq -r \
+  SCM_REVIEW_COMMENTS=$(ui_print "$RAW" | jq -r \
     '.value[].comments[] | select(.commentType == 1) | "[\(.author.displayName)] \(.content)"' \
-    2>/dev/null || echo "")
+    2>/dev/null || ui_print "")
 }
 
 # _scm_azure_pr_comment_reply COMMENT_ID BODY
@@ -193,7 +193,7 @@ _scm_azure_pr_comment() {
     "${_AZ_API_BASE}/pullrequests/${PR_ID}/threads?api-version=7.1" \
     "$PAYLOAD")
 
-  echo "$RESULT" | jq -e '.id' >/dev/null 2>&1 && echo "general" && return 0
+  ui_print "$RESULT" | jq -e '.id' >/dev/null 2>&1 && ui_print "general" && return 0
   return 1
 }
 
@@ -225,8 +225,8 @@ _scm_azure_pr_comment_inline() {
       "${_AZ_API_BASE}/pullrequests/${PR_ID}/threads?api-version=7.1" \
       "$PAYLOAD")
 
-    if echo "$RESULT" | jq -e '.id' >/dev/null 2>&1; then
-      echo "inline"
+    if ui_print "$RESULT" | jq -e '.id' >/dev/null 2>&1; then
+      ui_print "inline"
       return 0
     fi
   fi
