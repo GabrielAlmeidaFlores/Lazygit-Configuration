@@ -371,7 +371,7 @@ ANALYSES_ORDER=()
 # Returns a Nerd Fonts icon for the given analysis type.
 _get_analysis_icon() {
   case "$1" in
-    "Architecture")       ui_print_raw '🏗️' ;;
+    "Architecture")       ui_print_raw '🏗' ;;
     "Security")           ui_print_raw '🔒' ;;
     "Code Quality")       ui_print_raw '💎' ;;
     "Test Coverage")      ui_print_raw '🧪' ;;

@@ -140,14 +140,19 @@ ui_spinner_start() {
   local MSG="$1"
   local FRAMES="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
   (
-    local I=0 _FIFO
+    local I=0 _FIFO _FIFO_OK
     _FIFO="/tmp/.ui_spinner_$$"
-    mkfifo "$_FIFO" 2>/dev/null && exec 9<>"$_FIFO" && rm -f "$_FIFO" || exec 9</dev/null
+    rm -f "$_FIFO" 2>/dev/null
+    mkfifo "$_FIFO" 2>/dev/null && exec 9<>"$_FIFO" && rm -f "$_FIFO" && _FIFO_OK=1
     while true; do
       local F="${FRAMES:$I:1}"
       ( printf "\r  ${_CC}%s${_C0}  %s  " "$F" "$MSG" >/dev/tty ) 2>/dev/null
       I=$(( (I + 1) % 10 ))
-      read -r -t 0.1 _ <&9 2>/dev/null
+      if [ -n "$_FIFO_OK" ]; then
+        read -r -t 0.15 _ <&9 2>/dev/null
+      else
+        sleep 0.15
+      fi
     done
   ) &
   _SPINNER_PID=$!
