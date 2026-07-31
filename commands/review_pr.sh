@@ -96,7 +96,7 @@ SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Analysis model ($CURRENT_PROVIDER)  " \
   --header="Model used to analyze the code — runs the 3-pass review for each analysis type" \
   --height=50% \
-  --border=rounded
+  --border=rounded \
   --margin=0,1,0,1)
 
 [ -z "$SELECTED_ANALYSIS_MODEL" ] && ui_cancel && exit 0
@@ -121,7 +121,7 @@ All  (runs all analyses above)" | fzf \
   --prompt="  Analyses (Tab to select)  " \
   --header="Select one or more analysis types — Enter to confirm" \
   --height=50% \
-  --border=rounded
+  --border=rounded \
   --margin=0,1,0,1)
 
 [ -z "$ANALYSES_RAW" ] && ui_cancel && exit 0
@@ -538,7 +538,7 @@ SELECTED_COMMENT_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Comment generation model ($CURRENT_PROVIDER)  " \
   --header="Model used to write PR comments for each issue found — can differ from the analysis model" \
   --height=50% \
-  --border=rounded
+  --border=rounded \
   --margin=0,1,0,1)
 
 [ -z "$SELECTED_COMMENT_MODEL" ] && ui_cancel && exit 0
