@@ -48,7 +48,9 @@ if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   exit 0
 fi
 
-PR_LIST=$(ui_print "$PR_JSON" | jq -r '.[] | "#\(.number)  \(.title)  [\(.author) → \(.headRefName)]"')
+PR_LIST=$(ui_print "$PR_JSON" | jq -r '.[] |
+  (if .isDraft then "DRAFT  " else "       " end) +
+  "#\(.number)  \(.title)  [\(.author) · \(.baseRefName) ← \(.headRefName)]"')
 
 SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
   --prompt="  Select PR  " \

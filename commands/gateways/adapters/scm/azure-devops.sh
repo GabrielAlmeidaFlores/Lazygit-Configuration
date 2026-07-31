@@ -121,7 +121,9 @@ _scm_azure_pr_list() {
     number:      .pullRequestId,
     title:       .title,
     author:      .createdBy.displayName,
-    headRefName: (.sourceRefName | ltrimstr("refs/heads/"))
+    headRefName: (.sourceRefName | ltrimstr("refs/heads/")),
+    baseRefName: (.targetRefName | ltrimstr("refs/heads/")),
+    isDraft:     (.isDraft // false)
   }]' 2>/dev/null
 }
 

@@ -41,18 +41,36 @@ _gh() {
 }
 
 # _scm_github_pr_list
-# Prints a JSON array: [{number, title, author, headRefName}]
+# Prints a normalized JSON array including open and draft PRs:
+# [{number, title, author, headRefName, baseRefName, isDraft}]
 _scm_github_pr_list() {
   _gh pr list --state open \
-    --json number,title,author,headRefName 2>/dev/null
+    --json number,title,author,headRefName,baseRefName,isDraft 2>/dev/null \
+    | jq '[.[] | {
+        number:      .number,
+        title:       .title,
+        author:      .author.login,
+        headRefName: .headRefName,
+        baseRefName: .baseRefName,
+        isDraft:     .isDraft
+      }]'
 }
 
 # _scm_github_pr_view PR_ID
-# Prints a JSON object: {title, body, author, additions, deletions, changedFiles, headRefOid}
+# Prints a normalized JSON object.
 _scm_github_pr_view() {
   _gh pr view "$1" \
     --json title,body,author,additions,deletions,changedFiles,headRefOid \
-    2>/dev/null
+    2>/dev/null \
+    | jq '{
+        title:        .title,
+        body:         (.body // "No description provided."),
+        author:       .author.login,
+        additions:    .additions,
+        deletions:    .deletions,
+        changedFiles: .changedFiles,
+        headRefOid:   .headRefOid
+      }'
 }
 
 # _scm_github_pr_diff PR_ID
