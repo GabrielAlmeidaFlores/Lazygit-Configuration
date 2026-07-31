@@ -403,9 +403,12 @@ ui_prompt() {
 # ui_prompt_proceed "label"
 # Displays [Enter] / [e] / [Ctrl+C] options. Stores result in UI_ACTION.
 # UI_ACTION values: "proceed" | "edit" | "skip"
+# Drains any buffered tty input before reading so that a keypress used to
+# trigger the script (e.g. Lazygit keybinding) does not auto-confirm the prompt.
 ui_prompt_proceed() {
   UI_ACTION=""
-  local ANS
+  local ANS _D
+  while IFS= read -r -t 0.05 _D </dev/tty 2>/dev/null; do :; done
   printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
   read -r ANS </dev/tty
   printf "\033[1A\033[2K\n" >/dev/tty
