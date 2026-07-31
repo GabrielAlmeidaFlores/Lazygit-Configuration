@@ -126,6 +126,29 @@ ui_section() {
   echo ""
 }
 
+# ui_stacktrace "TITLE" ["DETAIL" ...]
+# Renders a bordered error trace box to stderr for unrecoverable errors.
+# TITLE is displayed in red bold; each subsequent argument is a detail line.
+# Writes to stderr so it never pollutes captured stdout in $(...) calls.
+ui_stacktrace() {
+  local TITLE="$1"; shift
+  local HEADER="❌  ${TITLE}"
+  local TW
+  TW=$(_display_width "$HEADER")
+  local DASHES=$((_W - TW - 9))
+  [ $DASHES -lt 1 ] && DASHES=1
+  printf "\n  ╭─  ${_CRB}%s${_C0}  %s╮\n" "$HEADER" "$(_rep $DASHES '─')" >&2
+  for LINE in "$@"; do
+    [ -z "$LINE" ] && continue
+    local LW PAD
+    LW=$(_display_width "$LINE")
+    PAD=$((_IW - LW))
+    [ $PAD -lt 0 ] && PAD=0
+    printf "  │  ${_CD}%s${_C0}%${PAD}s  │\n" "$LINE" "" >&2
+  done
+  printf "  ╰%s╯\n\n" "$(_rep $((_W-4)) '─')" >&2
+}
+
 ui_spacer() { echo ""; }
 
 ui_success() { printf "  ${_CGB}✅${_C0}  %s\n"  "$*"; }

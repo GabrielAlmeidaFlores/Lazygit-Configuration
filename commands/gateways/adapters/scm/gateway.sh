@@ -57,11 +57,11 @@ scm_detect() {
   case "$REMOTE_URL" in
     *github.com*)
       SCM_PROVIDER="github"
-      _scm_github_init "$REMOTE_URL"
+      _scm_github_init "$REMOTE_URL" || exit 1
       ;;
     *dev.azure.com*|*visualstudio.com*|*ssh.dev.azure.com*)
       SCM_PROVIDER="azure-devops"
-      _scm_azure_init "$REMOTE_URL"
+      _scm_azure_init "$REMOTE_URL" || exit 1
       ;;
     *)
       ui_error "Unsupported remote URL: $REMOTE_URL"
