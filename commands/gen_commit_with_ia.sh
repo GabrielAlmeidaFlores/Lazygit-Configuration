@@ -126,3 +126,5 @@ if [ "$COMMITTED" = true ]; then
   COMMIT_BODY=$(ui_print "$RAW_MSG" | tail -n +3)
   _sync_pr_description "$COMMIT_TITLE" "$COMMIT_BODY"
 fi
+
+ui_return

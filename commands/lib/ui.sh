@@ -196,6 +196,22 @@ ui_info()    { printf "  %s\n"                        "$*"; }
 ui_cancel()  { printf "  ${_CD}🚫 Cancelled.${_C0}\n"; }
 ui_step()    { printf "  ${_CC}→${_C0}  %s\n"   "$*"; }
 
+# ui_return
+# Shows a styled box prompting the user to press Enter to return to Lazygit,
+# then waits for that keypress. Replaces the default Lazygit
+# "Press enter to return from subprocess" message, giving full UI control.
+ui_return() {
+  local MSG="Press Enter to return to Lazygit"
+  local MW
+  MW=$(_display_width "$MSG")
+  local DASHES=$((_W - MW - 9))
+  [ $DASHES -lt 1 ] && DASHES=1
+  echo ""
+  printf "  ╭─  ${_CB}%s${_C0}  %s╮\n" "$MSG" "$(_rep $DASHES '─')"
+  printf "  ╰%s╯\n" "$(_rep $((_W-4)) '─')"
+  read -r _ </dev/tty
+}
+
 # ui_print "text"
 # Prints text followed by a newline. Use instead of echo in all scripts.
 ui_print() { printf '%s\n' "$*"; }

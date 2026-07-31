@@ -91,3 +91,4 @@ while true; do
 done
 
 rm -f "$TEMP_FILE"
+ui_return

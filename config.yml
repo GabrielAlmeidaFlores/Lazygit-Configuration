@@ -1,3 +1,5 @@
+promptToReturnFromSubprocess: false
+
 gui:
   theme:
     activeBorderColor:
