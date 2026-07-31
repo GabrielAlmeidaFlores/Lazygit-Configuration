@@ -25,14 +25,14 @@
 
 export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_GW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if ! command -v ui_error >/dev/null 2>&1; then
-  _UI_LIB="$SCRIPT_DIR/../lib/ui.sh"
+  _UI_LIB="$_GW_DIR/../lib/ui.sh"
   [ -f "$_UI_LIB" ] && source "$_UI_LIB"
 fi
 
-CONFIG_FILE="$SCRIPT_DIR/../../config.env"
+CONFIG_FILE="$_GW_DIR/../../config.env"
 
 if [ -f "$CONFIG_FILE" ]; then
   source "$CONFIG_FILE"
@@ -45,7 +45,7 @@ else
 fi
 
 PROVIDER="${AI_PROVIDER:-copilot}"
-ADAPTER_FILE="$SCRIPT_DIR/adapters/${PROVIDER}.sh"
+ADAPTER_FILE="$_GW_DIR/adapters/ia/${PROVIDER}.sh"
 
 if [ ! -f "$ADAPTER_FILE" ]; then
   if command -v ui_error >/dev/null 2>&1; then

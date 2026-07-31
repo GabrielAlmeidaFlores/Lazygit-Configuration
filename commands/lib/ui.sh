@@ -58,7 +58,8 @@ _CB="\033[1m"
 _CD="\033[2m"
 _C0="\033[0m"
 
-_W=60
+_TERM_COLS=$(tput cols 2>/dev/null || echo 80)
+_W=$(( _TERM_COLS > 64 ? _TERM_COLS - 1 : 63 ))
 _IW=$((_W - 8))
 
 _rep() {
@@ -71,10 +72,22 @@ _top() { printf "  ╭%s╮\n" "$(_rep $((_W-4)) '─')"; }
 _mid() { printf "  ├%s┤\n" "$(_rep $((_W-4)) '─')"; }
 _bot() { printf "  ╰%s╯\n" "$(_rep $((_W-4)) '─')"; }
 
+# _display_width STRING
+# Returns the visual column width of STRING, accounting for double-width
+# emoji characters (4-byte UTF-8 sequences display as 2 columns).
+_display_width() {
+  local TEXT="$1" WIDE
+  WIDE=$(printf '%s' "$TEXT" | od -A n -t x1 | tr -s ' \n' '\n' | grep -cE '^f[0-4]$')
+  printf '%d' $(( ${#TEXT} + WIDE ))
+}
+
 _row() {
   local TEXT="$1" COLOR="${2:-}"
-  [ ${#TEXT} -gt $_IW ] && TEXT="${TEXT:0:$((_IW-3))}..."
-  local PAD=$((_IW - ${#TEXT}))
+  local TW
+  TW=$(_display_width "$TEXT")
+  [ "$TW" -gt "$_IW" ] && TEXT="${TEXT:0:$((_IW-3))}..." && TW=$((_IW))
+  local PAD=$((_IW - TW))
+  [ $PAD -lt 0 ] && PAD=0
   if [ -n "$COLOR" ]; then
     printf "  │  ${COLOR}%s${_C0}%${PAD}s  │\n" "$TEXT" ""
   else
@@ -113,28 +126,77 @@ ui_section() {
   echo ""
 }
 
+# ui_stacktrace "TITLE" ["DETAIL" ...]
+# Renders a bordered error trace box to stderr for unrecoverable errors.
+# TITLE is displayed in red bold; each subsequent argument is a detail line.
+# Writes to stderr so it never pollutes captured stdout in $(...) calls.
+ui_stacktrace() {
+  local TITLE="$1"; shift
+  local HEADER="❌  ${TITLE}"
+  local TW
+  TW=$(_display_width "$HEADER")
+  local DASHES=$((_W - TW - 9))
+  [ $DASHES -lt 1 ] && DASHES=1
+  printf "\n  ╭─  ${_CRB}%s${_C0}  %s╮\n" "$HEADER" "$(_rep $DASHES '─')" >&2
+  for LINE in "$@"; do
+    [ -z "$LINE" ] && continue
+    local LW PAD
+    LW=$(_display_width "$LINE")
+    PAD=$((_IW - LW))
+    [ $PAD -lt 0 ] && PAD=0
+    printf "  │  ${_CD}%s${_C0}%${PAD}s  │\n" "$LINE" "" >&2
+  done
+  printf "  ╰%s╯\n\n" "$(_rep $((_W-4)) '─')" >&2
+}
+
 ui_spacer() { echo ""; }
 
-ui_success() { printf "  ${_CGB}OK${_C0}    %s\n"   "$*"; }
-ui_error()   { printf "  ${_CRB}FAIL${_C0}  %s\n"   "$*"; }
-ui_warning() { printf "  ${_CY}WARN${_C0}  %s\n"    "$*"; }
-ui_info()    { printf "  %s\n"                       "$*"; }
-ui_cancel()  { printf "  ${_CD}Cancelled.${_C0}\n";       }
-ui_step()    { printf "  ${_CC}→${_C0}  %s\n"       "$*"; }
+ui_success() { printf "  ${_CGB}✅${_C0}  %s\n"  "$*"; }
+ui_error()   { printf "  ${_CRB}❌${_C0}  %s\n"  "$*"; }
+ui_warning() { printf "  ${_CY}⚠️${_C0}  %s\n"   "$*"; }
+ui_info()    { printf "  %s\n"                        "$*"; }
+ui_cancel()  { printf "  ${_CD}🚫 Cancelled.${_C0}\n"; }
+ui_step()    { printf "  ${_CC}→${_C0}  %s\n"   "$*"; }
+
+# ui_print "text"
+# Prints text followed by a newline. Use instead of echo in all scripts.
+ui_print() { printf '%s\n' "$*"; }
+
+# ui_print_raw "text"
+# Prints text without a trailing newline.
+ui_print_raw() { printf '%s' "$*"; }
+
+# ui_icon "escape"
+# Outputs a single character from a printf escape sequence or emoji.
+ui_icon() { printf "$1"; }
 
 # ui_content_box "Title" "text"
 # Renders a bordered box with a bold title and green-colored content lines.
 ui_content_box() {
   local TITLE="$1" CONTENT="$2"
-  local DASHES=$((_W - ${#TITLE} - 9))
+  local TITLE_W
+  TITLE_W=$(_display_width "$TITLE")
+  local DASHES=$((_W - TITLE_W - 9))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
   printf "  ╭─  ${_CB}%s${_C0}  %s╮\n" "$TITLE" "$(_rep $DASHES '─')"
   printf "  │%s│\n" "$(_rep $((_W-4)) ' ')"
   while IFS= read -r LINE; do
-    [ ${#LINE} -gt $_IW ] && LINE="${LINE:0:$((_IW-3))}..."
-    local PAD=$((_IW - ${#LINE}))
-    printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$LINE" ""
+    local LINE_W
+    LINE_W=$(_display_width "$LINE")
+    if [ "$LINE_W" -gt "$_IW" ] 2>/dev/null; then
+      printf '%s\n' "$LINE" | fold -s -w $_IW | while IFS= read -r WRAPPED; do
+        local WRAP_W PAD
+        WRAP_W=$(_display_width "$WRAPPED")
+        PAD=$((_IW - WRAP_W))
+        [ $PAD -lt 0 ] && PAD=0
+        printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$WRAPPED" ""
+      done
+    else
+      local PAD=$((_IW - LINE_W))
+      [ $PAD -lt 0 ] && PAD=0
+      printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$LINE" ""
+    fi
   done <<< "$CONTENT"
   printf "  │%s│\n" "$(_rep $((_W-4)) ' ')"
   _bot
@@ -162,10 +224,13 @@ ui_table_row() {
   esac
   local VCOL=$((_IW - _COL - 2))
   [ $VCOL -lt 4 ] && VCOL=4
-  local LPAD=$((_COL - ${#LABEL}))
+  local LW VW
+  LW=$(_display_width "$LABEL")
+  local LPAD=$((_COL - LW))
   [ $LPAD -lt 0 ] && LPAD=0
-  [ ${#VALUE} -gt $VCOL ] && VALUE="${VALUE:0:$((VCOL-3))}..."
-  local VPAD=$(($VCOL - ${#VALUE}))
+  VW=$(_display_width "$VALUE")
+  [ "$VW" -gt "$VCOL" ] && VALUE="${VALUE:0:$((VCOL-3))}..." && VW=$VCOL
+  local VPAD=$(($VCOL - VW))
   [ $VPAD -lt 0 ] && VPAD=0
   printf "  │  ${_CB}%s${_C0}%${LPAD}s  ${VCOLOR}%s${_C0}%${VPAD}s  │\n" \
     "$LABEL" "" "$VALUE" ""
@@ -315,17 +380,23 @@ ui_press_enter() {
 
 # ui_prompt_triage
 # Stage 1 triage prompt for PR issue review. Stores result in UI_ACTION.
-# UI_ACTION values: "generate" | "ignore" | "quit"
+# UI_ACTION values: "generate" | "auto_post" | "ignore" | "quit"
+#
+#   [g] generate + review  — generate comment, show it, then approve/edit/skip
+#   [a] auto-post          — generate and post in background, move to next issue
+#   [n] ignore             — skip this issue entirely
+#   [q] quit               — stop the loop
 ui_prompt_triage() {
   UI_ACTION=""
   local ANS
-  printf "\n  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
+  printf "\n  ${_CD}[g]${_C0} generate + review   ${_CD}[a]${_C0} auto-post   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
   printf "\033[1A\033[2K\n" >/dev/tty
   case "$ANS" in
-    [gG]) UI_ACTION="generate" ;;
-    [qQ]) UI_ACTION="quit"     ;;
-    *)    UI_ACTION="ignore"   ;;
+    [gG]) UI_ACTION="generate"  ;;
+    [aA]) UI_ACTION="auto_post" ;;
+    [qQ]) UI_ACTION="quit"      ;;
+    *)    UI_ACTION="ignore"    ;;
   esac
 }
 

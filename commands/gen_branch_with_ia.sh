@@ -12,7 +12,7 @@ source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 clear
-ui_header "AI Branch Name"
+ui_header "🌿  AI Branch Name"
 
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
 if [ -z "$FILES_CHANGED" ]; then

@@ -1,27 +1,25 @@
 #!/bin/bash
-# cursor.sh — Cursor Agent CLI adapter for generative_ia
+# copilot.sh — GitHub Copilot CLI adapter for generative_ia
 #
 # Configuration (via config.env):
-#   MODEL        — Primary model    (empty = Cursor default)
-#   FALLBACK_MODEL — Fallback model (empty = no fallback)
-#   MAX_RETRIES  — Retry attempts per model  (default: 2)
-#   TIMEOUT      — Request timeout in seconds  (default: 60)
-#   CURSOR_BIN   — Path to agent binary  (empty = auto-detect from PATH)
-#   CURSOR_MODE  — Agent mode: ask | plan  (default: ask)
+#   MODEL          — Primary model    (empty = Copilot default)
+#   FALLBACK_MODEL — Fallback model   (empty = no fallback)
+#   MAX_RETRIES    — Retry attempts per model  (default: 2)
+#   TIMEOUT        — Request timeout in seconds  (default: 60)
+#   COPILOT_BIN    — Path to copilot binary  (empty = auto-detect from PATH)
 #
-# _generative_ia_cursor PROMPT [VERBOSE]
-#   Calls the Cursor agent CLI with PROMPT and prints the response to stdout.
+# _generative_ia_copilot PROMPT [VERBOSE]
+#   Calls the GitHub Copilot CLI with PROMPT and prints the response to stdout.
 #   Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
 
-CURSOR_BIN="${CURSOR_BIN:-$(which agent)}"
-CURSOR_MODE="${CURSOR_MODE:-ask}"
+COPILOT_BIN="${COPILOT_BIN:-$(which copilot)}"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_helpers.sh"
 
-# _generative_ia_cursor PROMPT [VERBOSE]
-# Calls the Cursor agent CLI with PROMPT and prints the response to stdout.
+# _generative_ia_copilot PROMPT [VERBOSE]
+# Calls the GitHub Copilot CLI with PROMPT and prints the response to stdout.
 # Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
-_generative_ia_cursor() {
+_generative_ia_copilot() {
   local PROMPT="$1"
   local VERBOSE="${2:-0}"
   local _AI_PID="" _CANCELLED=0 _TEMP_OUT
@@ -31,8 +29,8 @@ _generative_ia_cursor() {
     return 1
   fi
 
-  if [ ! -x "$CURSOR_BIN" ]; then
-    ui_error "Cursor agent binary not found or not executable at $CURSOR_BIN" >&2
+  if [ ! -x "$COPILOT_BIN" ]; then
+    ui_error "Copilot binary not found or not executable at $COPILOT_BIN" >&2
     return 1
   fi
 
@@ -66,12 +64,16 @@ _generative_ia_cursor() {
       MODEL_LABEL="$CURRENT_MODEL"
     fi
 
-    [ "$VERBOSE" = "1" ] && ui_step "Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
+    [ "$VERBOSE" = "1" ] && ui_step "🧠  Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
 
     local ATTEMPT=1
 
     while [ $ATTEMPT -le $MAX_RETRIES ] && [ $_CANCELLED -eq 0 ]; do
-      _run_with_timeout $TIMEOUT "$CURSOR_BIN" -p --trust --mode="$CURSOR_MODE" "${MODEL_ARGS[@]}" "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      if [ "$VERBOSE" = "1" ]; then
+        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" >"$_TEMP_OUT" 2>/dev/null &
+      else
+        _run_with_timeout $TIMEOUT "$COPILOT_BIN" --available-tools= "${MODEL_ARGS[@]}" -p "$PROMPT" --silent >"$_TEMP_OUT" 2>/dev/null &
+      fi
       _AI_PID=$!
       wait "$_AI_PID"
       local EXIT_CODE=$?
