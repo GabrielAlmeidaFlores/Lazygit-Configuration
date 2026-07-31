@@ -72,10 +72,22 @@ _top() { printf "  ╭%s╮\n" "$(_rep $((_W-4)) '─')"; }
 _mid() { printf "  ├%s┤\n" "$(_rep $((_W-4)) '─')"; }
 _bot() { printf "  ╰%s╯\n" "$(_rep $((_W-4)) '─')"; }
 
+# _display_width STRING
+# Returns the visual column width of STRING, accounting for double-width
+# emoji characters (4-byte UTF-8 sequences display as 2 columns).
+_display_width() {
+  local TEXT="$1" WIDE
+  WIDE=$(printf '%s' "$TEXT" | od -A n -t x1 | tr -s ' \n' '\n' | grep -cE '^f[0-4]$')
+  printf '%d' $(( ${#TEXT} + WIDE ))
+}
+
 _row() {
   local TEXT="$1" COLOR="${2:-}"
-  [ ${#TEXT} -gt $_IW ] && TEXT="${TEXT:0:$((_IW-3))}..."
-  local PAD=$((_IW - ${#TEXT}))
+  local TW
+  TW=$(_display_width "$TEXT")
+  [ "$TW" -gt "$_IW" ] && TEXT="${TEXT:0:$((_IW-3))}..." && TW=$((_IW))
+  local PAD=$((_IW - TW))
+  [ $PAD -lt 0 ] && PAD=0
   if [ -n "$COLOR" ]; then
     printf "  │  ${COLOR}%s${_C0}%${PAD}s  │\n" "$TEXT" ""
   else
@@ -116,12 +128,12 @@ ui_section() {
 
 ui_spacer() { echo ""; }
 
-ui_success() { printf "  ${_CGB}${_C0}  %s\n"  "$*"; }
-ui_error()   { printf "  ${_CRB}${_C0}  %s\n"  "$*"; }
-ui_warning() { printf "  ${_CY}${_C0}  %s\n"   "$*"; }
+ui_success() { printf "  ${_CGB}✅${_C0}  %s\n"  "$*"; }
+ui_error()   { printf "  ${_CRB}❌${_C0}  %s\n"  "$*"; }
+ui_warning() { printf "  ${_CY}⚠️${_C0}  %s\n"   "$*"; }
 ui_info()    { printf "  %s\n"                        "$*"; }
-ui_cancel()  { printf "  ${_CD} Cancelled.${_C0}\n"; }
-ui_step()    { printf "  ${_CC}${_C0}  %s\n"   "$*"; }
+ui_cancel()  { printf "  ${_CD}🚫 Cancelled.${_C0}\n"; }
+ui_step()    { printf "  ${_CC}→${_C0}  %s\n"   "$*"; }
 
 # ui_print "text"
 # Prints text followed by a newline. Use instead of echo in all scripts.
@@ -132,27 +144,34 @@ ui_print() { printf '%s\n' "$*"; }
 ui_print_raw() { printf '%s' "$*"; }
 
 # ui_icon "escape"
-# Outputs a single Nerd Fonts character from a printf escape sequence.
-# Example: ui_icon ''
+# Outputs a single character from a printf escape sequence or emoji.
 ui_icon() { printf "$1"; }
 
 # ui_content_box "Title" "text"
 # Renders a bordered box with a bold title and green-colored content lines.
 ui_content_box() {
   local TITLE="$1" CONTENT="$2"
-  local DASHES=$((_W - ${#TITLE} - 9))
+  local TITLE_W
+  TITLE_W=$(_display_width "$TITLE")
+  local DASHES=$((_W - TITLE_W - 9))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
   printf "  ╭─  ${_CB}%s${_C0}  %s╮\n" "$TITLE" "$(_rep $DASHES '─')"
   printf "  │%s│\n" "$(_rep $((_W-4)) ' ')"
   while IFS= read -r LINE; do
-    if [ ${#LINE} -gt $_IW ]; then
+    local LINE_W
+    LINE_W=$(_display_width "$LINE")
+    if [ "$LINE_W" -gt "$_IW" ] 2>/dev/null; then
       printf '%s\n' "$LINE" | fold -s -w $_IW | while IFS= read -r WRAPPED; do
-        local PAD=$((_IW - ${#WRAPPED}))
+        local WRAP_W PAD
+        WRAP_W=$(_display_width "$WRAPPED")
+        PAD=$((_IW - WRAP_W))
+        [ $PAD -lt 0 ] && PAD=0
         printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$WRAPPED" ""
       done
     else
-      local PAD=$((_IW - ${#LINE}))
+      local PAD=$((_IW - LINE_W))
+      [ $PAD -lt 0 ] && PAD=0
       printf "  │  ${_CGB}%s${_C0}%${PAD}s  │\n" "$LINE" ""
     fi
   done <<< "$CONTENT"
@@ -182,10 +201,13 @@ ui_table_row() {
   esac
   local VCOL=$((_IW - _COL - 2))
   [ $VCOL -lt 4 ] && VCOL=4
-  local LPAD=$((_COL - ${#LABEL}))
+  local LW VW
+  LW=$(_display_width "$LABEL")
+  local LPAD=$((_COL - LW))
   [ $LPAD -lt 0 ] && LPAD=0
-  [ ${#VALUE} -gt $VCOL ] && VALUE="${VALUE:0:$((VCOL-3))}..."
-  local VPAD=$(($VCOL - ${#VALUE}))
+  VW=$(_display_width "$VALUE")
+  [ "$VW" -gt "$VCOL" ] && VALUE="${VALUE:0:$((VCOL-3))}..." && VW=$VCOL
+  local VPAD=$(($VCOL - VW))
   [ $VPAD -lt 0 ] && VPAD=0
   printf "  │  ${_CB}%s${_C0}%${LPAD}s  ${VCOLOR}%s${_C0}%${VPAD}s  │\n" \
     "$LABEL" "" "$VALUE" ""

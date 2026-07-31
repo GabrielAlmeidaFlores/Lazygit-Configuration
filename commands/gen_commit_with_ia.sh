@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/gateways/generative-ia.sh"
 source "$SCRIPT_DIR/gateways/adapters/scm/gateway.sh"
 
 clear
-ui_header "AI Commit Message"
+ui_header "📝  AI Commit Message"
 
 FILES=$(git diff --cached --name-only | head -n 15 | tr '\n' ', ')
 if [ -z "$FILES" ]; then

@@ -38,7 +38,7 @@ render_template() {
   ui_print "$RESULT"
 }
 
-ui_header "AI PR Review"
+ui_header "🔍  AI PR Review"
 ui_step "Fetching open PRs..."
 
 PR_JSON=$(scm_pr_list 2>/dev/null)
@@ -176,7 +176,12 @@ ${PR_REVIEW_COMMENTS:-None}
 DO NOT report issues that have already been mentioned in the comments above."
 fi
 
-ui_info "+${PR_ADDITIONS}  -${PR_DELETIONS}  across ${PR_FILES} file(s)"
+INLINE_COUNT=$(ui_print "$PR_COMMENTS_RAW" | jq 'length' 2>/dev/null || ui_print "0")
+COMMENT_STATUS="${INLINE_COUNT} existing comment(s)"
+
+ui_panel \
+  "📊  +${PR_ADDITIONS}  📊  -${PR_DELETIONS}  ·  ${PR_FILES} file(s) changed" \
+  "💬  ${COMMENT_STATUS}"
 
 # get_diff_location FILENAME DIFF
 # Scans DIFF for the first added line belonging to a file matching FILENAME.
@@ -258,15 +263,15 @@ ANALYSES_ORDER=()
 # Returns a Nerd Fonts icon for the given analysis type.
 _get_analysis_icon() {
   case "$1" in
-    "Architecture")       ui_icon '' ;;
-    "Security")           ui_icon '' ;;
-    "Code Quality")       ui_icon '' ;;
-    "Test Coverage")      ui_icon '' ;;
-    "Performance")        ui_icon '' ;;
-    "Bugs")               ui_icon '' ;;
-    "Fix Validation")     ui_icon '' ;;
-    "Spelling & Grammar") ui_icon '' ;;
-    *)                    ui_icon '' ;;
+    "Architecture")       ui_print_raw '🏗️' ;;
+    "Security")           ui_print_raw '🔒' ;;
+    "Code Quality")       ui_print_raw '💎' ;;
+    "Test Coverage")      ui_print_raw '🧪' ;;
+    "Performance")        ui_print_raw '⚡' ;;
+    "Bugs")               ui_print_raw '🐛' ;;
+    "Fix Validation")     ui_print_raw '🔧' ;;
+    "Spelling & Grammar") ui_print_raw '📝' ;;
+    *)                    ui_print_raw '→' ;;
   esac
 }
 
@@ -329,7 +334,7 @@ run_analysis() {
     fi
   }
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 1 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🔍  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -349,7 +354,7 @@ run_analysis() {
   [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
 ${P1_ISSUES}"
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 2 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "👁  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -372,7 +377,7 @@ ${P1_ISSUES}"
 $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 3 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🛡️  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -412,7 +417,7 @@ ANALYSIS_PIDS=()
 ANALYSIS_EXIT_CODES=()
 
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_info "Running ${TOTAL_ANALYSES} analysis in parallel..."
+ui_panel "⚙️  Running ${TOTAL_ANALYSES} analyses in parallel  ⏳"
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
