@@ -2,9 +2,11 @@
 # review_pr.sh — Interactive AI-powered PR review for Lazygit
 #
 # Lists open PRs, runs focused AI analyses, and posts natural code review
-# comments on GitHub. All AI prompts are configured in config.env.
+# comments on the pull request. All AI prompts are configured in config.env.
+# Supports GitHub and Azure DevOps — provider is detected automatically from
+# the git remote URL.
 #
-# Dependencies: gh, fzf, jq
+# Dependencies: fzf, jq, curl  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
 # Config:       commands/config.env
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,54 +15,18 @@ export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/loca
 
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
-
-# _resolve_gh_auth
-# Resolves the GitHub PAT for the current repository without exporting GH_TOKEN
-# globally (which would break the Copilot CLI that rejects classic PATs).
-# Sets _GH_PAT for use in specific gh and gh api calls only.
-# Priority:
-#   1. PAT embedded in the remote origin URL (https://TOKEN@github.com/...)
-#   2. git config --local github.user  →  gh auth token -u <user>
-#   3. Default active gh account (no PAT override)
-_GH_PAT=""
-_resolve_gh_auth() {
-  local REMOTE_URL PAT
-  REMOTE_URL=$(git remote get-url origin 2>/dev/null)
-  PAT=$(ui_print "$REMOTE_URL" | sed -n 's|https://\([^@]*\)@github\.com.*|\1|p')
-  if [ -n "$PAT" ]; then
-    _GH_PAT="$PAT"
-    return 0
-  fi
-
-  local LOCAL_GH_USER TOKEN
-  LOCAL_GH_USER=$(git config --local github.user 2>/dev/null)
-  if [ -n "$LOCAL_GH_USER" ]; then
-    TOKEN=$(gh auth token -u "$LOCAL_GH_USER" 2>/dev/null)
-    [ -n "$TOKEN" ] && _GH_PAT="$TOKEN"
-  fi
-}
-
-# gh_run CMD [ARGS...]
-# Runs a gh command with the resolved local PAT when available.
-# Use this wrapper for all gh and gh api calls instead of gh directly.
-gh_run() {
-  if [ -n "$_GH_PAT" ]; then
-    GH_TOKEN="$_GH_PAT" gh "$@"
-  else
-    gh "$@"
-  fi
-}
-
-_resolve_gh_auth
+source "$SCRIPT_DIR/gateways/adapters/scm/gateway.sh"
 
 clear
 
-for dep in gh fzf jq; do
+for dep in fzf jq curl; do
   if ! command -v "$dep" &>/dev/null; then
     ui_error "'$dep' not found. Please install it before continuing."
     exit 1
   fi
 done
+
+scm_detect
 
 # render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
 # Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
@@ -75,14 +41,14 @@ render_template() {
 ui_header "AI PR Review"
 ui_step "Fetching open PRs..."
 
-PR_JSON=$(gh_run pr list --state open --json number,title,author,headRefName 2>/dev/null)
+PR_JSON=$(scm_pr_list 2>/dev/null)
 
 if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   ui_error "No open PRs found in this repository."
   exit 0
 fi
 
-PR_LIST=$(ui_print "$PR_JSON" | jq -r '.[] | "#\(.number)  \(.title)  [\(.author.login) → \(.headRefName)]"')
+PR_LIST=$(ui_print "$PR_JSON" | jq -r '.[] | "#\(.number)  \(.title)  [\(.author) → \(.headRefName)]"')
 
 SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
   --prompt="  Select PR  " \
@@ -173,7 +139,7 @@ ui_panel \
 
 ui_step "Fetching PR data..."
 
-PR_INFO=$(gh_run pr view "$PR_NUMBER" --json title,body,author,additions,deletions,changedFiles,headRefOid 2>/dev/null)
+PR_INFO=$(scm_pr_view "$PR_NUMBER" 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
   ui_error "Failed to fetch PR #${PR_NUMBER} data."
@@ -181,19 +147,20 @@ if [ -z "$PR_INFO" ]; then
 fi
 
 PR_BODY=$(ui_print "$PR_INFO" | jq -r '.body // "No description provided."')
-PR_AUTHOR=$(ui_print "$PR_INFO" | jq -r '.author.login')
+PR_AUTHOR=$(ui_print "$PR_INFO" | jq -r '.author')
 PR_ADDITIONS=$(ui_print "$PR_INFO" | jq -r '.additions')
 PR_DELETIONS=$(ui_print "$PR_INFO" | jq -r '.deletions')
 PR_FILES=$(ui_print "$PR_INFO" | jq -r '.changedFiles')
 PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
-PR_DIFF=$(gh_run pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
+PR_DIFF=$(scm_pr_diff "$PR_NUMBER" 2>/dev/null)
 
 ui_step "Fetching existing PR comments..."
-PR_COMMENTS_RAW=$(gh_run api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments" 2>/dev/null || ui_print "[]")
-PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
-PR_REVIEW_COMMENTS=$(gh_run pr view "$PR_NUMBER" --json comments --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
+scm_pr_get_comments "$PR_NUMBER"
+PR_COMMENTS_RAW="${SCM_INLINE_COMMENTS_RAW:-[]}"
+PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login // .author)] \(.path // ""):\(.line // "") - \(.body // .content)"' 2>/dev/null || ui_print "")
+PR_REVIEW_COMMENTS="${SCM_REVIEW_COMMENTS:-}"
 
-PR_COMMENTS_WITH_IDS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "\(.id)|[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
+PR_COMMENTS_WITH_IDS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "\(.id)|[\(.user.login // .author)] \(.path // ""):\(.line // "") - \(.body // .content)"' 2>/dev/null || ui_print "")
 
 EXISTING_COMMENTS=""
 if [ -n "$PR_COMMENTS" ] || [ -n "$PR_REVIEW_COMMENTS" ]; then
@@ -234,32 +201,10 @@ get_diff_location() {
 }
 
 # post_review_comment PR_NUMBER BODY FILE_PATH LINE COMMIT_SHA
-# Posts an inline review comment on FILE_PATH:LINE.
-# Falls back to a general PR comment if the inline post fails.
-# Prints "inline" or "general" to indicate which method succeeded.
+# Delegates to scm_pr_comment_inline, which attempts an inline comment and
+# falls back to a general comment automatically. Prints "inline" or "general".
 post_review_comment() {
-  local PR_NUM="$1" BODY="$2" FILE_PATH="$3" LINE="$4" COMMIT="$5"
-
-  if [ -n "$FILE_PATH" ] && [ -n "$LINE" ] && [ -n "$COMMIT" ]; then
-    if gh_run api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
-        --method POST \
-        --field body="$BODY" \
-        --field commit_id="$COMMIT" \
-        --field path="$FILE_PATH" \
-        --field line="$LINE" \
-        --field side="RIGHT" \
-        >/dev/null 2>&1; then
-      ui_print "inline"
-      return 0
-    fi
-  fi
-
-  if gh_run pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
-    ui_print "general"
-    return 0
-  fi
-
-  return 1
+  scm_pr_comment_inline "$1" "$2" "$3" "$4" "$5"
 }
 
 RESULTS_DIR=$(mktemp -d /tmp/pr_review_XXXXXX)
@@ -272,14 +217,14 @@ ANALYSES_ORDER=()
 # config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
-    "Architecture")         ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
-    "Security")             ui_print "${PROMPT_INSTRUCTIONS_SECURITY:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
-    "Code Quality")         ui_print "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
-    "Test Coverage")        ui_print "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
-    "Performance")          ui_print "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
-    "Bugs")                 ui_print "${PROMPT_INSTRUCTIONS_BUGS:-Check for potential bugs: null dereferences, off-by-one errors, race conditions, incorrect logic, resource leaks.}" ;;
-    "Fix Validation")       ui_print "${PROMPT_INSTRUCTIONS_FIX_VALIDATION:-Review existing PR comments requesting fixes and validate if they have been addressed in the current diff.}" ;;
-    "Spelling & Grammar")   ui_print "${PROMPT_INSTRUCTIONS_SPELLING:-Detect language and check for spelling mistakes, typos, missing accents in Portuguese/Spanish, grammatical errors in comments and strings.}" ;;
+    "Architecture")       ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
+    "Security")           ui_print "${PROMPT_INSTRUCTIONS_SECURITY:-Check for security issues: exposed secrets, injection risks, unsanitized inputs.}" ;;
+    "Code Quality")       ui_print "${PROMPT_INSTRUCTIONS_CODE_QUALITY:-Check for code quality issues: duplication, complexity, poor naming, missing error handling.}" ;;
+    "Test Coverage")      ui_print "${PROMPT_INSTRUCTIONS_TEST_COVERAGE:-Check for test coverage issues: missing tests for new functionality, edge cases.}" ;;
+    "Performance")        ui_print "${PROMPT_INSTRUCTIONS_PERFORMANCE:-Check for performance issues: N+1 queries, inefficient loops, blocking operations.}" ;;
+    "Bugs")               ui_print "${PROMPT_INSTRUCTIONS_BUGS:-Check for potential bugs: null dereferences, off-by-one errors, race conditions, incorrect logic, resource leaks.}" ;;
+    "Fix Validation")     ui_print "${PROMPT_INSTRUCTIONS_FIX_VALIDATION:-Review existing PR comments requesting fixes and validate if they have been addressed in the current diff.}" ;;
+    "Spelling & Grammar") ui_print "${PROMPT_INSTRUCTIONS_SPELLING:-Detect language and check for spelling mistakes, typos, missing accents in Portuguese/Spanish, grammatical errors in comments and strings.}" ;;
   esac
 }
 
@@ -399,7 +344,7 @@ $P2_ISSUES" \
   if [ "$FINAL_STATUS" = "ISSUES_FOUND" ] && [ -n "$FINAL_ISSUES" ]; then
     ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
   fi
-  
+
   if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ "$FINAL_STATUS" = "OK" ]; then
     ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments"
   fi
@@ -416,12 +361,12 @@ while IFS= read -r ANALYSIS; do
   [ -z "$ANALYSIS" ] && continue
   ANALYSES_ORDER+=("$ANALYSIS")
   INSTRUCTIONS=$(get_instructions "$ANALYSIS")
-  
+
   (
     run_analysis "$ANALYSIS" "$INSTRUCTIONS"
     exit $?
   ) &
-  
+
   ANALYSIS_PIDS[$ANALYSIS_INDEX]=$!
   ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
 done <<< "$ANALYSES_RAW"
@@ -472,29 +417,26 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
       COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || printf '0')
       COUNT=$(printf '%s' "$COUNT" | tr -d '\n\r ')
       ui_table_row "$ANALYSIS_NAME" "${COUNT} issue(s) found" "warn" ;;
-    *)            ui_table_row "$ANALYSIS_NAME" "analysis failed"  "error" ;;
+    *)  ui_table_row "$ANALYSIS_NAME" "analysis failed" "error" ;;
   esac
 done
 ui_table_end
 
 if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
   RESOLVED_COMMENTS=$(cat "$RESULTS_DIR/Fix_Validation.resolved_comments" 2>/dev/null)
-  
+
   if [ -n "$RESOLVED_COMMENTS" ] && ui_print "$RESOLVED_COMMENTS" | grep -q "FIXED"; then
-    ui_step "Resolving fixed comments on GitHub..."
+    ui_step "Resolving fixed comments..."
     RESOLVED_COUNT=0
-    
+
     while IFS= read -r ISSUE_LINE; do
       if ui_print "$ISSUE_LINE" | grep -q "FIXED"; then
         COMMENT_TEXT=$(ui_print "$ISSUE_LINE" | sed 's/.*FIXED - //' | sed 's/ Evidence:.*//')
-        
+
         if [ -n "$COMMENT_TEXT" ] && [ -n "$PR_COMMENTS_WITH_IDS" ]; then
           while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
             if [ -n "$COMMENT_ID" ] && ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
-              if gh_run api "repos/{owner}/{repo}/pulls/comments/${COMMENT_ID}/replies" \
-                  --method POST \
-                  --field body="✅ Fixed and validated by AI analysis" \
-                  >/dev/null 2>&1; then
+              if scm_pr_comment_reply "$COMMENT_ID" "Fixed and validated by AI analysis" 2>/dev/null; then
                 RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
               fi
               break
@@ -503,7 +445,7 @@ if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
         fi
       fi
     done <<< "$RESOLVED_COMMENTS"
-    
+
     if [ $RESOLVED_COUNT -gt 0 ]; then
       ui_success "Marked ${RESOLVED_COUNT} comment(s) as resolved"
     fi
@@ -536,9 +478,8 @@ case "$LANG_CHOICE" in
   "PT"*) COMMENT_LANG="Brazilian Portuguese" ;;
   "EN"*) COMMENT_LANG="English" ;;
   "ES"*) COMMENT_LANG="Spanish" ;;
-   *)     COMMENT_LANG="English" ;;
+  *)     COMMENT_LANG="English" ;;
 esac
-
 
 COMMENTS_POSTED=0
 TOTAL_ISSUES=${#ALL_ISSUES[@]}
@@ -623,7 +564,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
                 || ui_success "Comment posted."
               COMMENTS_POSTED=$((COMMENTS_POSTED + 1))
             else
-              ui_error "Failed to post comment via gh."
+              ui_error "Failed to post comment."
             fi
             break
             ;;

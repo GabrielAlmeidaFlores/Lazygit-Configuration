@@ -122,6 +122,14 @@ ui_info()    { printf "  %s\n"                       "$*"; }
 ui_cancel()  { printf "  ${_CD}Cancelled.${_C0}\n";       }
 ui_step()    { printf "  ${_CC}→${_C0}  %s\n"       "$*"; }
 
+# ui_print "text"
+# Prints text followed by a newline. Use instead of echo in all scripts.
+ui_print() { printf '%s\n' "$*"; }
+
+# ui_print_raw "text"
+# Prints text without a trailing newline.
+ui_print_raw() { printf '%s' "$*"; }
+
 # ui_content_box "Title" "text"
 # Renders a bordered box with a bold title and green-colored content lines.
 ui_content_box() {

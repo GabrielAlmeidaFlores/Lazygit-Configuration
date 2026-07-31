@@ -45,7 +45,7 @@ else
 fi
 
 PROVIDER="${AI_PROVIDER:-copilot}"
-ADAPTER_FILE="$SCRIPT_DIR/adapters/${PROVIDER}.sh"
+ADAPTER_FILE="$SCRIPT_DIR/adapters/ia/${PROVIDER}.sh"
 
 if [ ! -f "$ADAPTER_FILE" ]; then
   if command -v ui_error >/dev/null 2>&1; then

@@ -43,8 +43,9 @@ A powerful LazyGit configuration with automated workflows, AI-powered code revie
 | [LazyGit](https://github.com/jesseduffield/lazygit) | Terminal UI for git | `brew install lazygit` |
 | [git-delta](https://github.com/dandavison/delta) | Syntax-highlighted diffs | `brew install git-delta` |
 | [fzf](https://github.com/junegunn/fzf) | Interactive fuzzy selection menus | `brew install fzf` |
-| [gh](https://cli.github.com/) | GitHub CLI (PR list, diff, inline comments) | `brew install gh` |
 | [jq](https://jqlang.github.io/jq/) | JSON parsing for PR data | `brew install jq` |
+| curl | Azure DevOps REST API calls | pre-installed on macOS |
+| [gh](https://cli.github.com/) | GitHub CLI (required for GitHub remotes) | `brew install gh` |
 | Git | Version control | pre-installed on macOS |
 | Bash | Shell scripting | pre-installed on macOS |
 
@@ -64,6 +65,7 @@ gh auth login
 
 - [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) — Default AI provider (`copilot` command)
 - [Cursor Agent CLI](https://cursor.com/docs/cli) — Alternative AI provider (`agent` command)
+- [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) — For Azure DevOps auth via `az login` (alternative to `AZURE_DEVOPS_PAT`)
 
 ---
 
@@ -90,7 +92,8 @@ ln -sf ~/Documents/Lazygit-Configuration/config.env ~/.config/lazygit/config.env
 ```bash
 chmod +x ~/.config/lazygit/commands/*.sh
 chmod +x ~/.config/lazygit/commands/gateways/*.sh
-chmod +x ~/.config/lazygit/commands/gateways/adapters/*.sh
+chmod +x ~/.config/lazygit/commands/gateways/adapters/ia/*.sh
+chmod +x ~/.config/lazygit/commands/gateways/adapters/scm/*.sh
 ```
 
 ### 4. Add the `pr-review` terminal command
@@ -195,6 +198,31 @@ Interactive multi-step workflow to analyze open PRs and post inline comments on 
 
 All configuration lives in `config.env`.
 
+### SCM Provider
+
+The PR review tool detects the source control provider automatically from the git remote URL:
+
+| Remote URL pattern | Provider detected |
+|---|---|
+| `github.com` | GitHub (uses `gh` CLI) |
+| `dev.azure.com` | Azure DevOps (uses REST API) |
+| `*.visualstudio.com` | Azure DevOps (uses REST API) |
+| `ssh.dev.azure.com` | Azure DevOps (uses REST API) |
+
+**GitHub authentication** is resolved automatically (PAT in remote URL, local `github.user` config, or active `gh` account).
+
+**Azure DevOps authentication** — set one of these in `config.env`:
+
+```bash
+# Option 1: Personal Access Token (recommended)
+# Required scopes: Code (Read), Pull Request Threads (Read & Write)
+AZURE_DEVOPS_PAT="your-pat-here"
+
+# Option 2: leave empty and use az CLI
+# az login
+# az account set --subscription <id>
+```
+
 ### AI Provider & Model
 
 ```bash
@@ -291,18 +319,23 @@ gui:
 ~/.config/lazygit/
 ├── commands/
 │   ├── lib/
-│   │   └── ui.sh                     # Terminal UI library (box-drawing, colors, prompts)
+│   │   └── ui.sh                         # Terminal UI library (box-drawing, colors, prompts)
 │   ├── gateways/
-│   │   ├── generative-ia.sh          # AI gateway — routes to active provider
+│   │   ├── generative-ia.sh              # AI gateway — routes to active provider
 │   │   └── adapters/
-│   │       ├── _helpers.sh           # Shared timeout utilities
-│   │       ├── cursor.sh             # Cursor Agent adapter
-│   │       └── copilot.sh            # GitHub Copilot adapter
-│   ├── review_pr.sh                  # AI PR Review (pr-review command)
-│   ├── gen_commit_with_ia.sh         # Commit message generator
-│   └── gen_branch_with_ia.sh         # Branch name generator
-├── config.env                        # All configuration: provider, models, 7 prompt templates
-├── config.yml                        # LazyGit config, Dracula theme & keybindings
+│   │       ├── ia/                       # AI provider adapters
+│   │       │   ├── _helpers.sh           # Shared timeout utilities
+│   │       │   ├── cursor.sh             # Cursor Agent adapter
+│   │       │   └── copilot.sh            # GitHub Copilot adapter
+│   │       └── scm/                      # Source control adapters
+│   │           ├── gateway.sh            # SCM gateway — detects provider, uniform API
+│   │           ├── github.sh             # GitHub adapter (gh CLI)
+│   │           └── azure-devops.sh       # Azure DevOps adapter (REST API + curl)
+│   ├── review_pr.sh                      # AI PR Review (pr-review command)
+│   ├── gen_commit_with_ia.sh             # Commit message generator
+│   └── gen_branch_with_ia.sh             # Branch name generator
+├── config.env                            # All configuration: provider, models, 7 prompt templates
+├── config.yml                            # LazyGit config, Dracula theme & keybindings
 └── README.md
 ```
 
@@ -349,6 +382,21 @@ gui:
 ---
 
 ## Troubleshooting
+
+### Azure DevOps: authentication not configured
+
+Set `AZURE_DEVOPS_PAT` in `config.env` or run `az login` with the Azure CLI:
+
+```bash
+# Install Azure CLI (macOS)
+brew install azure-cli
+
+# Login and set subscription
+az login
+az devops configure --defaults organization=https://dev.azure.com/YOUR_ORG
+```
+
+Required PAT scopes: **Code (Read)** and **Pull Request Threads (Read & Write)**.
 
 ### `fzf` not found
 
@@ -427,7 +475,7 @@ Add to `~/.zshrc` to make it permanent.
 
 ### Adding a new AI provider
 
-1. Create `commands/gateways/adapters/<provider>.sh` with a `_generative_ia_<provider>()` function
+1. Create `commands/gateways/adapters/ia/<provider>.sh` with a `_generative_ia_<provider>()` function
 2. Register it in `generative-ia.sh` under the `case "$PROVIDER"` block
 3. Set `AI_PROVIDER="<provider>"` in `config.env`
 
