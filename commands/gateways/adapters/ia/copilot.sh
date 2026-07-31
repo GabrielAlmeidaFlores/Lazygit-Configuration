@@ -64,7 +64,7 @@ _generative_ia_copilot() {
       MODEL_LABEL="$CURRENT_MODEL"
     fi
 
-    [ "$VERBOSE" = "1" ] && ui_step "Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
+    [ "$VERBOSE" = "1" ] && ui_step "易  Thinking  ($MODEL_LABEL)  Ctrl+C to cancel" >&2
 
     local ATTEMPT=1
 

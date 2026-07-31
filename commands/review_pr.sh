@@ -329,7 +329,7 @@ run_analysis() {
     fi
   }
 
-  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 1 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -349,7 +349,7 @@ run_analysis() {
   [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
 ${P1_ISSUES}"
 
-  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 2 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -372,7 +372,7 @@ ${P1_ISSUES}"
 $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
-  ui_step "Analyzing  ${ANALYSIS_NAME}  —  pass 3 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "  ${ICON}  ${ANALYSIS_NAME}    pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
