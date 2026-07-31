@@ -39,9 +39,9 @@ render_template() {
 }
 
 ui_header "🔍  AI PR Review"
-ui_step "Fetching open PRs..."
-
+ui_spinner_start "Fetching open PRs..."
 PR_JSON=$(scm_pr_list 2>/dev/null)
+ui_spinner_stop
 
 if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
   ui_error "No open PRs found in this repository."
@@ -146,11 +146,11 @@ ui_panel \
   "PR #${PR_NUMBER}  ·  ${PR_TITLE}" \
   "Analysis model: ${ANALYSIS_MODEL_LABEL}  ·  Provider: ${CURRENT_PROVIDER}"
 
-ui_step "Fetching PR data..."
-
+ui_spinner_start "Fetching PR data..."
 PR_INFO=$(scm_pr_view "$PR_NUMBER" 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
+  ui_spinner_stop
   ui_error "Failed to fetch PR #${PR_NUMBER} data."
   exit 1
 fi
@@ -162,9 +162,11 @@ PR_DELETIONS=$(ui_print "$PR_INFO" | jq -r '.deletions')
 PR_FILES=$(ui_print "$PR_INFO" | jq -r '.changedFiles')
 PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(scm_pr_diff "$PR_NUMBER" 2>/dev/null)
+ui_spinner_stop
 
-ui_step "Fetching existing PR comments..."
+ui_spinner_start "Fetching existing PR comments..."
 scm_pr_get_comments "$PR_NUMBER"
+ui_spinner_stop
 PR_COMMENTS_RAW="${SCM_INLINE_COMMENTS_RAW:-[]}"
 PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login // .author)] \(.path // ""):\(.line // "") - \(.body // .content)"' 2>/dev/null || ui_print "")
 PR_REVIEW_COMMENTS="${SCM_REVIEW_COMMENTS:-}"
@@ -416,7 +418,7 @@ run_analysis() {
     local PROMPT="$1"
     _AI_STATUS="" _AI_ISSUES=""
     local RESPONSE EXIT_CODE
-    RESPONSE=$(generative_ia "$PROMPT" 1)
+    RESPONSE=$(generative_ia "$PROMPT" 0)
     EXIT_CODE=$?
     [ $EXIT_CODE -eq 130 ] && return 130
     [ $EXIT_CODE -ne 0 ] || [ -z "$RESPONSE" ] && _AI_STATUS="ERROR" && return 1
@@ -440,7 +442,8 @@ run_analysis() {
     fi
   }
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🔍  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3" >&2
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -460,7 +463,8 @@ run_analysis() {
   [ -n "$P1_ISSUES" ] && P1_RESULT="${P1_RESULT}
 ${P1_ISSUES}"
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "👁  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3" >&2
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -483,7 +487,8 @@ ${P1_ISSUES}"
 $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
-  ICON=$(_get_analysis_icon "$ANALYSIS_NAME"); ui_step "🛡️  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
+  ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
+  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3" >&2
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -523,7 +528,7 @@ ANALYSIS_PIDS=()
 ANALYSIS_EXIT_CODES=()
 
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_panel "🛠  Running ${TOTAL_ANALYSES} analyses in parallel  🕐"
+ui_spinner_start "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
@@ -544,6 +549,7 @@ for i in "${!ANALYSIS_PIDS[@]}"; do
   wait "${ANALYSIS_PIDS[$i]}"
   ANALYSIS_EXIT_CODES[$i]=$?
 done
+ui_spinner_stop
 
 for EXIT_CODE in "${ANALYSIS_EXIT_CODES[@]}"; do
   if [ $EXIT_CODE -eq 130 ]; then
@@ -735,13 +741,14 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
       ;;
     generate)
       [ -n "$COMMENT_MODEL" ] && export MODEL="$COMMENT_MODEL"
-      ui_step "Generating comment in ${COMMENT_LANG}..."
+      ui_spinner_start "Generating comment in ${COMMENT_LANG}..."
 
       COMMENT_PROMPT=$(_build_comment_prompt \
         "$ISSUE" "$SNIPPET" "$FILENAME" "$PR_TITLE" "$COMMENT_LANG")
 
       RAW_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
       EXIT_CODE=$?
+      ui_spinner_stop
 
       if [ $EXIT_CODE -eq 130 ]; then
         ui_cancel
@@ -801,10 +808,11 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 
 if [ ${#AUTO_POST_PIDS[@]} -gt 0 ]; then
-  ui_step "Waiting for ${AUTO_POST_COUNT} background comment(s)..."
+  ui_spinner_start "Waiting for ${AUTO_POST_COUNT} background comment(s)..."
   for pid in "${AUTO_POST_PIDS[@]}"; do
     wait "$pid" 2>/dev/null
   done
+  ui_spinner_stop
   ui_success "Background posting complete."
 fi
 

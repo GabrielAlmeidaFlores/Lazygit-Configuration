@@ -51,8 +51,10 @@ PROMPT=$(render_template "$PROMPT_BRANCH_TEMPLATE" \
   "__DIFF__"    "$DIFF_SNIPPET"  \
   "__CONTEXT__" "$CONTEXT_SECTION")
 
-RAW_NAME=$(generative_ia "$PROMPT" "$VERBOSE")
+ui_spinner_start "🧠  Generating branch name..."
+RAW_NAME=$(generative_ia "$PROMPT" 0)
 EXIT_CODE=$?
+ui_spinner_stop
 [ $EXIT_CODE -eq 130 ] && exit 0
 [ $EXIT_CODE -ne 0 ] && ui_error "Failed to get AI response." && exit 1
 
@@ -70,7 +72,8 @@ while true; do
   case "$UI_ACTION" in
     proceed)
       if [ -n "$FINAL_NAME" ]; then
-        git checkout -b "$FINAL_NAME"
+        GIT_OUT=$(git checkout -b "$FINAL_NAME" 2>&1)
+        ui_content_box "Git Output" "$GIT_OUT"
         ui_success "Switched to: $FINAL_NAME"
       else
         ui_error "Branch name is empty. Aborted."

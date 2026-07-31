@@ -46,8 +46,10 @@ PROMPT=$(render_template "$PROMPT_COMMIT_TEMPLATE" \
   "__DIFF__"    "$DIFF_SNIPPET" \
   "__CONTEXT__" "$CONTEXT_SECTION")
 
-RAW_MSG=$(generative_ia "$PROMPT" "$VERBOSE")
+ui_spinner_start "🧠  Generating commit message..."
+RAW_MSG=$(generative_ia "$PROMPT" 0)
 EXIT_CODE=$?
+ui_spinner_stop
 [ $EXIT_CODE -eq 130 ] && exit 0
 [ $EXIT_CODE -ne 0 ] && ui_error "Failed to get AI response." && exit 1
 

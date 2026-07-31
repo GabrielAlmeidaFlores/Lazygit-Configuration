@@ -126,6 +126,46 @@ ui_section() {
   echo ""
 }
 
+_SPINNER_PID=""
+
+# ui_spinner_start "message"
+# Starts a background animated spinner on /dev/tty writing the given message.
+# The spinner animates using braille frames (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) at 100ms intervals,
+# overwriting the same terminal line with \r. Designed for sequential blocking
+# operations where only one spinner runs at a time. Falls back to a static
+# ui_step when /dev/tty is unavailable.
+ui_spinner_start() {
+  [ -n "$_SPINNER_PID" ] && return 0
+  ( printf "" >/dev/tty ) 2>/dev/null || { ui_step "$1"; return 0; }
+  local MSG="$1"
+  local FRAMES="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+  (
+    local I=0 _FIFO
+    _FIFO="/tmp/.ui_spinner_$$"
+    mkfifo "$_FIFO" 2>/dev/null && exec 9<>"$_FIFO" && rm -f "$_FIFO" || exec 9</dev/null
+    while true; do
+      local F="${FRAMES:$I:1}"
+      ( printf "\r  ${_CC}%s${_C0}  %s  " "$F" "$MSG" >/dev/tty ) 2>/dev/null
+      I=$(( (I + 1) % 10 ))
+      read -r -t 0.1 _ <&9 2>/dev/null
+    done
+  ) &
+  _SPINNER_PID=$!
+}
+
+# ui_spinner_stop
+# Kills the running spinner process, clears the spinner line, and resets the PID.
+# disown removes the job from bash's tracking table before killing so bash never
+# prints a "Terminated" job-control notice to the terminal.
+ui_spinner_stop() {
+  if [ -n "$_SPINNER_PID" ]; then
+    disown "$_SPINNER_PID" 2>/dev/null
+    kill "$_SPINNER_PID" 2>/dev/null
+    ( printf "\r\033[2K" >/dev/tty ) 2>/dev/null
+    _SPINNER_PID=""
+  fi
+}
+
 # ui_stacktrace "TITLE" ["DETAIL" ...]
 # Renders a bordered error trace box to stderr for unrecoverable errors.
 # TITLE is displayed in red bold; each subsequent argument is a detail line.
@@ -257,13 +297,27 @@ ui_checklist_start() {
 
 # ui_checklist_item "text"
 # Renders a single [ ] item row inside a checklist box.
+# Long items are word-wrapped; continuation lines are indented to align
+# with the text start (after the "[ ] " prefix).
 ui_checklist_item() {
   local TEXT="$1"
-  local MAX=$((_IW - 4))
-  [ ${#TEXT} -gt $MAX ] && TEXT="${TEXT:0:$((MAX-3))}..."
-  local PAD=$((_IW - 4 - ${#TEXT}))
-  [ $PAD -lt 0 ] && PAD=0
-  printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$TEXT" ""
+  local FIRST_W=$((_IW - 4))
+  local CONT_W=$((_IW - 5))
+  [ $FIRST_W -lt 4 ] && FIRST_W=4
+  [ $CONT_W  -lt 4 ] && CONT_W=4
+  local IS_FIRST=1
+  printf '%s' "$TEXT" | fold -s -w $FIRST_W | while IFS= read -r CHUNK; do
+    if [ "$IS_FIRST" = "1" ]; then
+      local PAD=$(($FIRST_W - ${#CHUNK}))
+      [ $PAD -lt 0 ] && PAD=0
+      printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$CHUNK" ""
+      IS_FIRST=0
+    else
+      local PAD=$(($CONT_W - ${#CHUNK}))
+      [ $PAD -lt 0 ] && PAD=0
+      printf "  │       %s%${PAD}s  │\n" "$CHUNK" ""
+    fi
+  done
 }
 
 # ui_checklist_end
@@ -351,9 +405,12 @@ ui_prompt() {
 # ui_prompt_proceed "label"
 # Displays [Enter] / [e] / [Ctrl+C] options. Stores result in UI_ACTION.
 # UI_ACTION values: "proceed" | "edit" | "skip"
+# Drains any buffered tty input before reading so that a keypress used to
+# trigger the script (e.g. Lazygit keybinding) does not auto-confirm the prompt.
 ui_prompt_proceed() {
   UI_ACTION=""
-  local ANS
+  local ANS _D
+  while IFS= read -r -t 0.05 _D </dev/tty 2>/dev/null; do :; done
   printf "\n  ${_CD}[Enter]${_C0} %s   ${_CD}[e]${_C0} edit   ${_CD}[Ctrl+C]${_C0} cancel\n  ${_CC}→${_C0}  " "${1:-proceed}" >/dev/tty
   read -r ANS </dev/tty
   printf "\033[1A\033[2K\n" >/dev/tty
