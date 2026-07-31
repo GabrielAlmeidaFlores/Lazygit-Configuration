@@ -214,6 +214,70 @@ get_diff_location() {
   '
 }
 
+# _diff_line_valid FILE_PATH LINE DIFF
+# Returns 0 if LINE is within a diff hunk for FILE_PATH in DIFF, 1 otherwise.
+_diff_line_valid() {
+  local FILE_PATH="$1" TARGET="$2" DIFF="$3"
+  ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v target="$TARGET" '
+    $0 ~ ("\\+\\+\\+ b/.*" fn) { in_file=1; cur=0; next }
+    /^diff --git/ && in_file { exit }
+    in_file && /^@@ / {
+      sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
+      cur = $0 + 0; next
+    }
+    in_file && (/^\+[^+]/ || /^ /) && cur > 0 {
+      if (cur == target) { found=1; exit }
+      cur++
+    }
+    in_file && /^-/ { next }
+    END { exit (found ? 0 : 1) }
+  '
+}
+
+# _find_nearest_diff_line FILE_PATH TARGET_LINE DIFF
+# Returns the line number in DIFF that is closest to TARGET_LINE for FILE_PATH.
+# Falls back to the first added line in the file.
+_find_nearest_diff_line() {
+  local FILE_PATH="$1" TARGET="$2" DIFF="$3"
+  ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v target="$TARGET" '
+    $0 ~ ("\\+\\+\\+ b/.*" fn) { fp=substr($0,7); in_file=1; cur=0; next }
+    /^diff --git/ && in_file { exit }
+    in_file && /^@@ / {
+      sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
+      cur = $0 + 0; next
+    }
+    in_file && /^\+[^+]/ && cur > 0 {
+      d = cur - target; if (d < 0) d = -d
+      if (best_dist == "" || d < best_dist) { best_dist=d; best=cur; best_fp=fp }
+      cur++
+    }
+    in_file && /^-/ { next }
+    in_file && cur > 0 { cur++ }
+    END { if (best > 0) print best_fp ":" best }
+  '
+}
+
+# _find_diff_line_by_keyword FILE_PATH KEYWORD DIFF
+# Searches added lines in FILE_PATH for KEYWORD and returns the first match as path:line.
+_find_diff_line_by_keyword() {
+  local FILE_PATH="$1" KEYWORD="$2" DIFF="$3"
+  [ -z "$KEYWORD" ] && return 1
+  ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v kw="$KEYWORD" '
+    $0 ~ ("\\+\\+\\+ b/.*" fn) { fp=substr($0,7); in_file=1; cur=0; next }
+    /^diff --git/ && in_file { exit }
+    in_file && /^@@ / {
+      sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
+      cur = $0 + 0; next
+    }
+    in_file && /^\+[^+]/ && cur > 0 {
+      if (index($0, kw) > 0) { print fp ":" cur; exit }
+      cur++
+    }
+    in_file && /^-/ { next }
+    in_file && cur > 0 { cur++ }
+  '
+}
+
 # post_review_comment PR_NUMBER BODY FILE_PATH LINE COMMIT_SHA
 # Delegates to scm_pr_comment_inline, which attempts an inline comment and
 # falls back to a general comment automatically. Prints "inline" or "general".
@@ -243,19 +307,53 @@ _parse_comment_response() {
   [ -z "$_COMMENT_TEXT" ]     && _COMMENT_TEXT="$RESPONSE"
 }
 
-# _resolve_comment_location AI_LOCATION FILENAME DIFF
-# Determines the final file:line for the inline comment.
-# Prefers the AI-determined location; falls back to get_diff_location.
+# _resolve_comment_location AI_LOCATION FILENAME ISSUE_TEXT DIFF
+# Determines the best file:line for the inline comment.
+# Priority:
+#   1. AI-provided location — verified to be within a diff hunk
+#   2. Keyword search in the diff using terms from the issue text
+#   3. Nearest diff hunk line to the AI-suggested line number
+#   4. First added line in the file (get_diff_location)
+# Sets _DIFF_PATH and _DIFF_LINE.
 _resolve_comment_location() {
-  local AI_LOC="$1" FILENAME="$2" DIFF="$3"
+  local AI_LOC="$1" FILENAME="$2" ISSUE_TEXT="$3" DIFF="$4"
   _DIFF_PATH="" _DIFF_LINE=""
+
   if [ -n "$AI_LOC" ] && [ "$AI_LOC" != "unknown" ]; then
-    _DIFF_PATH="${AI_LOC%%:*}"
-    _DIFF_LINE="${AI_LOC##*:}"
-    if [[ "$_DIFF_LINE" =~ ^[0-9]+$ ]]; then
-      return 0
+    local AI_PATH AI_LINE
+    AI_PATH="${AI_LOC%%:*}"
+    AI_LINE="${AI_LOC##*:}"
+    if [[ "$AI_LINE" =~ ^[0-9]+$ ]]; then
+      local VERIFY_PATH="${AI_PATH:-$FILENAME}"
+      if _diff_line_valid "$VERIFY_PATH" "$AI_LINE" "$DIFF"; then
+        _DIFF_PATH="$VERIFY_PATH"
+        _DIFF_LINE="$AI_LINE"
+        return 0
+      fi
+      local NEAREST
+      NEAREST=$(_find_nearest_diff_line "$VERIFY_PATH" "$AI_LINE" "$DIFF")
+      if [ -n "$NEAREST" ]; then
+        _DIFF_PATH="${NEAREST%%:*}"
+        _DIFF_LINE="${NEAREST##*:}"
+        return 0
+      fi
     fi
   fi
+
+  if [ -n "$FILENAME" ] && [ -n "$ISSUE_TEXT" ]; then
+    local KEYWORD KEYWORD_MATCH
+    KEYWORD=$(ui_print "$ISSUE_TEXT" | grep -oE '[a-zA-Z_][a-zA-Z0-9_]{3,}\(' | head -1 | tr -d '(')
+    [ -z "$KEYWORD" ] && KEYWORD=$(ui_print "$ISSUE_TEXT" | grep -oE '[a-zA-Z_][a-zA-Z0-9_]{4,}' | grep -v "^\(the\|and\|for\|not\|with\|this\|that\|from\|into\|have\|been\)$" | head -1)
+    if [ -n "$KEYWORD" ]; then
+      KEYWORD_MATCH=$(_find_diff_line_by_keyword "$FILENAME" "$KEYWORD" "$DIFF")
+      if [ -n "$KEYWORD_MATCH" ]; then
+        _DIFF_PATH="${KEYWORD_MATCH%%:*}"
+        _DIFF_LINE="${KEYWORD_MATCH##*:}"
+        return 0
+      fi
+    fi
+  fi
+
   local FALLBACK
   FALLBACK=$(get_diff_location "$FILENAME" "$DIFF")
   _DIFF_PATH="${FALLBACK%%:*}"
@@ -626,7 +724,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
         GENERATED=$(generative_ia "$COMMENT_PROMPT" 0)
         if [ $? -eq 0 ] && [ -n "$GENERATED" ]; then
           _parse_comment_response "$GENERATED"
-          _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$PR_DIFF"
+          _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$TEXT" "$PR_DIFF"
           post_review_comment "$PR_NUMBER" "$_COMMENT_TEXT" \
             "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT" >/dev/null 2>&1
         fi
@@ -666,7 +764,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 
         case "$REVIEW" in
           post)
-            _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$PR_DIFF"
+            _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$TEXT" "$PR_DIFF"
             POST_RESULT=$(post_review_comment \
               "$PR_NUMBER" "$GENERATED_COMMENT" \
               "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT")
