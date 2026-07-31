@@ -150,6 +150,7 @@ ui_spinner_start "Fetching PR data..."
 PR_INFO=$(scm_pr_view "$PR_NUMBER" 2>/dev/null)
 
 if [ -z "$PR_INFO" ]; then
+  ui_spinner_stop
   ui_error "Failed to fetch PR #${PR_NUMBER} data."
   exit 1
 fi
@@ -538,7 +539,7 @@ while IFS= read -r ANALYSIS; do
   (
     run_analysis "$ANALYSIS" "$INSTRUCTIONS"
     exit $?
-  ) 2>/dev/null &
+  ) &
 
   ANALYSIS_PIDS[$ANALYSIS_INDEX]=$!
   ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
@@ -747,6 +748,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 
       RAW_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
       EXIT_CODE=$?
+      ui_spinner_stop
 
       if [ $EXIT_CODE -eq 130 ]; then
         ui_cancel

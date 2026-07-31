@@ -4,3 +4,4 @@ state.yml
 # Temporary files
 *.tmp
 .DS_Store
+/.playwright-mcp

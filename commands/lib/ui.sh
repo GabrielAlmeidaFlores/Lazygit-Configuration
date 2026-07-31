@@ -118,7 +118,7 @@ ui_panel() {
 # ui_section "Title"
 # Renders an inline section separator: "  ──  Title  ──────────────"
 ui_section() {
-   local LABEL="$*"
+  local LABEL="$*"
   local DASHES=$((_W - ${#LABEL} - 8))
   [ $DASHES -lt 2 ] && DASHES=2
   echo ""
@@ -140,12 +140,14 @@ ui_spinner_start() {
   local MSG="$1"
   local FRAMES="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
   (
-    local I=0
+    local I=0 _FIFO
+    _FIFO="/tmp/.ui_spinner_$$"
+    mkfifo "$_FIFO" 2>/dev/null && exec 9<>"$_FIFO" && rm -f "$_FIFO" || exec 9</dev/null
     while true; do
       local F="${FRAMES:$I:1}"
       ( printf "\r  ${_CC}%s${_C0}  %s  " "$F" "$MSG" >/dev/tty ) 2>/dev/null
       I=$(( (I + 1) % 10 ))
-      sleep 0.1
+      read -r -t 0.1 _ <&9 2>/dev/null
     done
   ) &
   _SPINNER_PID=$!
