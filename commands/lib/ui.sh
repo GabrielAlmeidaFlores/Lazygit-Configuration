@@ -335,17 +335,23 @@ ui_press_enter() {
 
 # ui_prompt_triage
 # Stage 1 triage prompt for PR issue review. Stores result in UI_ACTION.
-# UI_ACTION values: "generate" | "ignore" | "quit"
+# UI_ACTION values: "generate" | "auto_post" | "ignore" | "quit"
+#
+#   [g] generate + review  — generate comment, show it, then approve/edit/skip
+#   [a] auto-post          — generate and post in background, move to next issue
+#   [n] ignore             — skip this issue entirely
+#   [q] quit               — stop the loop
 ui_prompt_triage() {
   UI_ACTION=""
   local ANS
-  printf "\n  ${_CD}[g]${_C0} generate comment   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
+  printf "\n  ${_CD}[g]${_C0} generate + review   ${_CD}[a]${_C0} auto-post   ${_CD}[n]${_C0} ignore   ${_CD}[q]${_C0} quit\n  ${_CC}→${_C0}  " >/dev/tty
   read -r ANS </dev/tty
   printf "\033[1A\033[2K\n" >/dev/tty
   case "$ANS" in
-    [gG]) UI_ACTION="generate" ;;
-    [qQ]) UI_ACTION="quit"     ;;
-    *)    UI_ACTION="ignore"   ;;
+    [gG]) UI_ACTION="generate"  ;;
+    [aA]) UI_ACTION="auto_post" ;;
+    [qQ]) UI_ACTION="quit"      ;;
+    *)    UI_ACTION="ignore"    ;;
   esac
 }
 

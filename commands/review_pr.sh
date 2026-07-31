@@ -91,19 +91,19 @@ $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
 fi
 
-SELECTED_MODEL=$(ui_print "$MODEL_LIST" | fzf \
-  --prompt="  Model ($CURRENT_PROVIDER)  " \
-  --header="AI model for this session — Enter to confirm" \
+SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
+  --prompt="  Analysis model ($CURRENT_PROVIDER)  " \
+  --header="Model used to analyze the code — runs the 3-pass review for each analysis type" \
   --height=50% \
   --border=rounded)
 
-[ -z "$SELECTED_MODEL" ] && ui_cancel && exit 0
+[ -z "$SELECTED_ANALYSIS_MODEL" ] && ui_cancel && exit 0
 
-if [ "$SELECTED_MODEL" != "default" ]; then
-  export MODEL="$SELECTED_MODEL"
-  MODEL_LABEL="$SELECTED_MODEL"
+if [ "$SELECTED_ANALYSIS_MODEL" != "default" ]; then
+  export MODEL="$SELECTED_ANALYSIS_MODEL"
+  ANALYSIS_MODEL_LABEL="$SELECTED_ANALYSIS_MODEL"
 else
-  MODEL_LABEL="${MODEL:-default}"
+  ANALYSIS_MODEL_LABEL="${MODEL:-default}"
 fi
 
 ANALYSES_RAW=$(ui_print "Architecture
@@ -136,7 +136,7 @@ fi
 
 ui_panel \
   "PR #${PR_NUMBER}  ·  ${PR_TITLE}" \
-  "Model: ${MODEL_LABEL}  ·  Provider: ${CURRENT_PROVIDER}"
+  "Analysis model: ${ANALYSIS_MODEL_LABEL}  ·  Provider: ${CURRENT_PROVIDER}"
 
 ui_step "Fetching PR data..."
 
@@ -206,6 +206,47 @@ get_diff_location() {
 # falls back to a general comment automatically. Prints "inline" or "general".
 post_review_comment() {
   scm_pr_comment_inline "$1" "$2" "$3" "$4" "$5"
+}
+
+# _build_comment_prompt ISSUE SNIPPET FILENAME PR_TITLE COMMENT_LANG
+# Renders the comment generation prompt with all context placeholders.
+_build_comment_prompt() {
+  render_template "$PROMPT_COMMENT_TEMPLATE" \
+    "__ISSUE__"        "$1" \
+    "__SNIPPET__"      "$2" \
+    "__FILENAME__"     "$3" \
+    "__PR_TITLE__"     "$4" \
+    "__COMMENT_LANG__" "$5"
+}
+
+# _parse_comment_response RESPONSE
+# Extracts the LOCATION and comment text from the AI response.
+# Sets _COMMENT_TEXT (clean comment) and _COMMENT_LOCATION ("file:line" or "unknown").
+_parse_comment_response() {
+  local RESPONSE="$1"
+  _COMMENT_LOCATION=$(ui_print "$RESPONSE" | grep -i "^LOCATION:" | head -1 | sed 's/^LOCATION:[[:space:]]*//')
+  _COMMENT_TEXT=$(ui_print "$RESPONSE" | grep -iv "^LOCATION:" | sed -n '/[^[:space:]]/,$p')
+  [ -z "$_COMMENT_LOCATION" ] && _COMMENT_LOCATION="unknown"
+  [ -z "$_COMMENT_TEXT" ]     && _COMMENT_TEXT="$RESPONSE"
+}
+
+# _resolve_comment_location AI_LOCATION FILENAME DIFF
+# Determines the final file:line for the inline comment.
+# Prefers the AI-determined location; falls back to get_diff_location.
+_resolve_comment_location() {
+  local AI_LOC="$1" FILENAME="$2" DIFF="$3"
+  _DIFF_PATH="" _DIFF_LINE=""
+  if [ -n "$AI_LOC" ] && [ "$AI_LOC" != "unknown" ]; then
+    _DIFF_PATH="${AI_LOC%%:*}"
+    _DIFF_LINE="${AI_LOC##*:}"
+    if [[ "$_DIFF_LINE" =~ ^[0-9]+$ ]]; then
+      return 0
+    fi
+  fi
+  local FALLBACK
+  FALLBACK=$(get_diff_location "$FILENAME" "$DIFF")
+  _DIFF_PATH="${FALLBACK%%:*}"
+  _DIFF_LINE="${FALLBACK##*:}"
 }
 
 RESULTS_DIR=$(mktemp -d /tmp/pr_review_XXXXXX)
@@ -483,6 +524,19 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 done
 ui_checklist_end
 
+SELECTED_COMMENT_MODEL=$(ui_print "$MODEL_LIST" | fzf \
+  --prompt="  Comment generation model ($CURRENT_PROVIDER)  " \
+  --header="Model used to write PR comments for each issue found — can differ from the analysis model" \
+  --height=50% \
+  --border=rounded)
+
+[ -z "$SELECTED_COMMENT_MODEL" ] && ui_cancel && exit 0
+
+COMMENT_MODEL="$SELECTED_COMMENT_MODEL"
+if [ "$COMMENT_MODEL" = "default" ]; then
+  COMMENT_MODEL="${MODEL:-}"
+fi
+
 LANG_CHOICE=$(ui_print "PT — Portuguese
 EN — English
 ES — Spanish" | fzf \
@@ -501,6 +555,8 @@ case "$LANG_CHOICE" in
 esac
 
 COMMENTS_POSTED=0
+AUTO_POST_PIDS=()
+AUTO_POST_COUNT=0
 TOTAL_ISSUES=${#ALL_ISSUES[@]}
 ISSUE_INDEX=0
 STOP=0
@@ -542,15 +598,34 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
       ui_info "Ignored."
       continue
       ;;
+    auto_post)
+      COMMENT_PROMPT=$(_build_comment_prompt \
+        "$ISSUE" "$SNIPPET" "$FILENAME" "$PR_TITLE" "$COMMENT_LANG")
+
+      ui_step "Generating and posting in background..."
+
+      (
+        [ -n "$COMMENT_MODEL" ] && export MODEL="$COMMENT_MODEL"
+        GENERATED=$(generative_ia "$COMMENT_PROMPT" 0)
+        if [ $? -eq 0 ] && [ -n "$GENERATED" ]; then
+          _parse_comment_response "$GENERATED"
+          _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$PR_DIFF"
+          post_review_comment "$PR_NUMBER" "$_COMMENT_TEXT" \
+            "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT" >/dev/null 2>&1
+        fi
+      ) &
+      AUTO_POST_PIDS+=($!)
+      AUTO_POST_COUNT=$((AUTO_POST_COUNT + 1))
+      continue
+      ;;
     generate)
+      [ -n "$COMMENT_MODEL" ] && export MODEL="$COMMENT_MODEL"
       ui_step "Generating comment in ${COMMENT_LANG}..."
 
-      COMMENT_PROMPT=$(render_template "$PROMPT_COMMENT_TEMPLATE" \
-        "__ISSUE__"        "$ISSUE"        \
-        "__PR_TITLE__"     "$PR_TITLE"     \
-        "__COMMENT_LANG__" "$COMMENT_LANG")
+      COMMENT_PROMPT=$(_build_comment_prompt \
+        "$ISSUE" "$SNIPPET" "$FILENAME" "$PR_TITLE" "$COMMENT_LANG")
 
-      GENERATED_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
+      RAW_COMMENT=$(generative_ia "$COMMENT_PROMPT" 0)
       EXIT_CODE=$?
 
       if [ $EXIT_CODE -eq 130 ]; then
@@ -559,10 +634,13 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
         break
       fi
 
-      if [ $EXIT_CODE -ne 0 ] || [ -z "$GENERATED_COMMENT" ]; then
+      if [ $EXIT_CODE -ne 0 ] || [ -z "$RAW_COMMENT" ]; then
         ui_error "Failed to generate comment. Skipping."
         continue
       fi
+
+      _parse_comment_response "$RAW_COMMENT"
+      GENERATED_COMMENT="$_COMMENT_TEXT"
 
       while true; do
         ui_content_box "Generated Comment" "$GENERATED_COMMENT"
@@ -571,15 +649,13 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 
         case "$REVIEW" in
           post)
-            LOCATION=$(get_diff_location "$FILENAME" "$PR_DIFF")
-            DIFF_PATH="${LOCATION%%:*}"
-            DIFF_LINE="${LOCATION##*:}"
+            _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$PR_DIFF"
             POST_RESULT=$(post_review_comment \
               "$PR_NUMBER" "$GENERATED_COMMENT" \
-              "$DIFF_PATH" "$DIFF_LINE" "$PR_COMMIT")
+              "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT")
             if [ $? -eq 0 ]; then
               [ "$POST_RESULT" = "inline" ] \
-                && ui_success "Inline comment posted on ${DIFF_PATH}:${DIFF_LINE}" \
+                && ui_success "Inline comment posted on ${_DIFF_PATH}:${_DIFF_LINE}" \
                 || ui_success "Comment posted."
               COMMENTS_POSTED=$((COMMENTS_POSTED + 1))
             else
@@ -609,5 +685,16 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   esac
 done
 
-ui_panel "Done  ·  ${COMMENTS_POSTED} comment(s) posted on PR #${PR_NUMBER}"
+if [ ${#AUTO_POST_PIDS[@]} -gt 0 ]; then
+  ui_step "Waiting for ${AUTO_POST_COUNT} background comment(s)..."
+  for pid in "${AUTO_POST_PIDS[@]}"; do
+    wait "$pid" 2>/dev/null
+  done
+  ui_success "Background posting complete."
+fi
+
+TOTAL_POSTED=$((COMMENTS_POSTED + AUTO_POST_COUNT))
+ui_panel \
+  "Done  ·  PR #${PR_NUMBER}" \
+  "${COMMENTS_POSTED} manual + ${AUTO_POST_COUNT} auto-posted = ${TOTAL_POSTED} comment(s)"
 ui_press_enter

@@ -179,9 +179,9 @@ _scm_azure_pr_get_comments() {
 
 # _scm_azure_pr_comment_reply COMMENT_ID BODY
 # Azure DevOps does not support direct replies by comment ID in the same way.
-# Falls back to posting a new general thread comment.
+# Falls back to posting a new general thread comment on the PR.
 _scm_azure_pr_comment_reply() {
-  _scm_azure_pr_comment "$PR_NUMBER" "$2"
+  _scm_azure_pr_comment "$1" "$2"
 }
 # Posts a general thread comment. Prints "general" on success.
 _scm_azure_pr_comment() {
