@@ -278,7 +278,9 @@ ui_checklist_end() {
 ui_code_snippet() {
   local FILENAME="$1" CODE="$2"
   [ -z "$CODE" ] && return
-  local DASHES=$((_W - ${#FILENAME} - 12))
+  local FW DASHES
+  FW=$(_display_width "$FILENAME")
+  DASHES=$((_W - FW - 9))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
   printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
@@ -288,8 +290,15 @@ ui_code_snippet() {
       "+"*) COLOR="$_CG" ;;
       "-"*) COLOR="$_CR" ;;
     esac
-    local STRIPPED="${LINE:0:$_IW}"
-    local PAD=$((_IW - ${#STRIPPED}))
+    local LW STRIPPED PAD
+    LW=$(_display_width "$LINE")
+    if [ "$LW" -gt "$_IW" ] 2>/dev/null; then
+      STRIPPED="${LINE:0:$((_IW-3))}..."
+      LW=$_IW
+    else
+      STRIPPED="$LINE"
+    fi
+    PAD=$((_IW - LW))
     [ $PAD -lt 0 ] && PAD=0
     printf "  │  ${COLOR}%s${_C0}%${PAD}s  │\n" "$STRIPPED" ""
   done <<< "$CODE"
