@@ -66,28 +66,29 @@ PR_TITLE=$(ui_print "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
 CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
 
-DEFAULT_CURSOR_MODELS="default
-claude-4-5-sonnet
-claude-4-5
-claude-4-opus
-gpt-4o
-gpt-4.1
-o3
-gemini-2.5-pro"
+DEFAULT_CURSOR_MODELS="default  (use MODEL from config.env)
+gpt-4o-mini  (low — fast and economical)
+gpt-4o  (medium — balanced)
+gpt-4.1  (medium — balanced)
+claude-4-5-sonnet  (medium — strong reasoning)
+gemini-2.5-pro  (medium — multimodal)
+claude-4-5  (medium-high — latest sonnet)
+claude-4-opus  (high — premium quality)
+o3  (high — deep reasoning)"
 
-DEFAULT_COPILOT_MODELS="default
-claude-sonnet-4.6
-claude-sonnet-4.5
-claude-opus-4.6
-gpt-5.3-codex
-gemini-3.1-pro-preview"
+DEFAULT_COPILOT_MODELS="default  (use MODEL from config.env)
+gemini-3.1-pro-preview  (medium — fast and capable)
+claude-sonnet-4.5  (medium — balanced quality)
+claude-sonnet-4.6  (medium-high — latest sonnet)
+gpt-5.3-codex  (high — advanced coding)
+claude-opus-4.6  (high — premium quality)"
 
 if [ "$CURRENT_PROVIDER" = "cursor" ]; then
-  MODEL_LIST="${CURSOR_MODELS:+default
+  MODEL_LIST="${CURSOR_MODELS:+default  (use MODEL from config.env)
 $(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
 else
-  MODEL_LIST="${COPILOT_MODELS:+default
+  MODEL_LIST="${COPILOT_MODELS:+default  (use MODEL from config.env)
 $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
 fi
@@ -100,6 +101,8 @@ SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --margin=0,1,0,1)
 
 [ -z "$SELECTED_ANALYSIS_MODEL" ] && ui_cancel && exit 0
+
+SELECTED_ANALYSIS_MODEL=$(ui_print "$SELECTED_ANALYSIS_MODEL" | sed 's/[[:space:]]*(.*)//')
 
 if [ "$SELECTED_ANALYSIS_MODEL" != "default" ]; then
   export MODEL="$SELECTED_ANALYSIS_MODEL"
@@ -542,6 +545,8 @@ SELECTED_COMMENT_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --margin=0,1,0,1)
 
 [ -z "$SELECTED_COMMENT_MODEL" ] && ui_cancel && exit 0
+
+SELECTED_COMMENT_MODEL=$(ui_print "$SELECTED_COMMENT_MODEL" | sed 's/[[:space:]]*(.*)//')
 
 COMMENT_MODEL="$SELECTED_COMMENT_MODEL"
 if [ "$COMMENT_MODEL" = "default" ]; then
