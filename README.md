@@ -155,7 +155,7 @@ Interactive multi-step workflow to analyze open PRs and post inline comments on 
    - `Test Coverage` — missing tests, edge cases, untested critical logic
    - `Performance` — N+1 queries, inefficient loops, blocking operations
    - `Bugs` — null dereferences, off-by-one errors, race conditions, logic errors
-   - `Fix Validation` — validates if requested fixes from comments were addressed
+   - `Fix Validation` — validates fixes and auto-resolves GitHub comments
    - `Spelling & Grammar` — typos, missing accents (português), auto language detection
    - `All` — runs all eight in parallel
 4. **Fetch PR data** — pulls title, description, author, diff, and existing comments via `gh`

@@ -206,7 +206,7 @@ Code Quality       # Duplication, complexity, naming
 Test Coverage      # Missing tests, edge cases
 Performance        # N+1 queries, inefficient loops
 Bugs               # Null dereferences, off-by-one, race conditions, logic errors
-Fix Validation     # Validates if requested fixes from comments were addressed
+Fix Validation     # Validates fixes and auto-resolves GitHub comments
 Spelling & Grammar # Typos, missing accents, language detection
 ```
 

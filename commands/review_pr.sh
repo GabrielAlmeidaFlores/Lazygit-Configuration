@@ -189,8 +189,11 @@ PR_COMMIT=$(ui_print "$PR_INFO" | jq -r '.headRefOid')
 PR_DIFF=$(gh_run pr diff "$PR_NUMBER" 2>/dev/null | head -n 400)
 
 ui_step "Fetching existing PR comments..."
-PR_COMMENTS=$(gh_run api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments" 2>/dev/null | jq -r '.[] | "[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
+PR_COMMENTS_RAW=$(gh_run api "repos/{owner}/{repo}/pulls/${PR_NUMBER}/comments" 2>/dev/null || ui_print "[]")
+PR_COMMENTS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
 PR_REVIEW_COMMENTS=$(gh_run pr view "$PR_NUMBER" --json comments --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
+
+PR_COMMENTS_WITH_IDS=$(ui_print "$PR_COMMENTS_RAW" | jq -r '.[] | "\(.id)|[\(.user.login)] \(.path):\(.line) - \(.body)"' 2>/dev/null || ui_print "")
 
 EXISTING_COMMENTS=""
 if [ -n "$PR_COMMENTS" ] || [ -n "$PR_REVIEW_COMMENTS" ]; then
@@ -396,6 +399,10 @@ $P2_ISSUES" \
   if [ "$FINAL_STATUS" = "ISSUES_FOUND" ] && [ -n "$FINAL_ISSUES" ]; then
     ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
   fi
+  
+  if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ "$FINAL_STATUS" = "OK" ]; then
+    ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments"
+  fi
 }
 
 ANALYSIS_PIDS=()
@@ -448,7 +455,18 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
   STATUS=$(cat "$RESULTS_DIR/${ANALYSIS_KEY}.status" 2>/dev/null || ui_print "ERROR")
   case "$STATUS" in
-    OK)           ui_table_row "$ANALYSIS_NAME" "no issues"       "ok" ;;
+    OK)
+      if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ -f "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" ]; then
+        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || ui_print "0")
+        if [ "$RESOLVED_COUNT" -gt 0 ]; then
+          ui_table_row "$ANALYSIS_NAME" "${RESOLVED_COUNT} fix(es) validated" "ok"
+        else
+          ui_table_row "$ANALYSIS_NAME" "no fixes to validate" "ok"
+        fi
+      else
+        ui_table_row "$ANALYSIS_NAME" "no issues" "ok"
+      fi
+      ;;
     ISSUES_FOUND)
       COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || ui_print "0")
       ui_table_row "$ANALYSIS_NAME" "${COUNT} issue(s) found" "warn" ;;
@@ -456,6 +474,35 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   esac
 done
 ui_table_end
+
+if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
+  ui_step "Resolving fixed comments on GitHub..."
+  
+  RESOLVED_COMMENTS=$(cat "$RESULTS_DIR/Fix_Validation.resolved_comments" 2>/dev/null || ui_print "")
+  RESOLVED_COUNT=0
+  
+  while IFS= read -r ISSUE_LINE; do
+    if ui_print "$ISSUE_LINE" | grep -q "FIXED"; then
+      COMMENT_TEXT=$(ui_print "$ISSUE_LINE" | sed 's/.*FIXED - //' | sed 's/ Evidence:.*//')
+      
+      while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
+        if ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
+          if gh_run api "repos/{owner}/{repo}/pulls/comments/${COMMENT_ID}/replies" \
+              --method POST \
+              --field body="✅ Fixed and validated by AI analysis" \
+              >/dev/null 2>&1; then
+            RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
+          fi
+          break
+        fi
+      done <<< "$PR_COMMENTS_WITH_IDS"
+    fi
+  done <<< "$RESOLVED_COMMENTS"
+  
+  if [ $RESOLVED_COUNT -gt 0 ]; then
+    ui_success "Marked ${RESOLVED_COUNT} comment(s) as resolved"
+  fi
+fi
 
 if [ ${#ALL_ISSUES[@]} -eq 0 ]; then
   ui_success "No issues found. PR looks good!"
