@@ -528,7 +528,7 @@ ANALYSIS_PIDS=()
 ANALYSIS_EXIT_CODES=()
 
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_spinner_start "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
+ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
@@ -549,7 +549,6 @@ for i in "${!ANALYSIS_PIDS[@]}"; do
   wait "${ANALYSIS_PIDS[$i]}"
   ANALYSIS_EXIT_CODES[$i]=$?
 done
-ui_spinner_stop
 
 for EXIT_CODE in "${ANALYSIS_EXIT_CODES[@]}"; do
   if [ $EXIT_CODE -eq 130 ]; then
