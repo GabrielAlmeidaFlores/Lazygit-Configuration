@@ -117,7 +117,7 @@ VALUE=$(get_value)
 commands/
 ├── lib/
 │   ├── ui.sh                    # UI functions (ONLY file with echo/printf)
-│   └── config.sh                # Config loader (reads config.yaml via yq)
+│   └── config.sh                # Config loader (reads settings.yaml via yq)
 ├── gateways/
 │   ├── generative-ia.sh         # AI gateway (routes to providers)
 │   └── adapters/
@@ -128,7 +128,7 @@ commands/
 ├── gen_commit_with_ia.sh        # AI commit message generator
 └── gen_branch_with_ia.sh        # AI branch name generator
 
-config.yaml                      # All AI prompts and configuration (replaces config.env)
+settings.yaml                      # All AI prompts and configuration (replaces config.env)
 config.state.yaml                # Runtime state: last used provider/model (gitignored)
 config.state.yaml.example        # Template for config.state.yaml
 config.yml                       # LazyGit UI configuration
@@ -144,7 +144,7 @@ User Script → config_select_provider() → AI_PROVIDER set interactively
            → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor)
 ```
 
-#### Configuration (`config.yaml` → `lib/config.sh`)
+#### Configuration (`settings.yaml` → `lib/config.sh`)
 ```bash
 AI_PROVIDER="copilot"    # set at runtime via fzf picker; persisted in config.state.yaml
 MODEL=""                 # Primary model
@@ -226,9 +226,9 @@ $RESULTS_DIR/
 
 ## Configuration Management
 
-### ⚠️ CRITICAL RULE: ALL AI Prompts in `config.yaml`
+### ⚠️ CRITICAL RULE: ALL AI Prompts in `settings.yaml`
 
-**MANDATORY: Every single AI prompt MUST be defined in `config.yaml`.**
+**MANDATORY: Every single AI prompt MUST be defined in `settings.yaml`.**
 
 ❌ **NEVER hardcode prompts in scripts:**
 ```bash
@@ -237,9 +237,9 @@ PROMPT="You are an AI assistant. Analyze this code..."
 generative_ia "$PROMPT"
 ```
 
-✅ **ALWAYS externalize in config.yaml:**
+✅ **ALWAYS externalize in settings.yaml:**
 ```yaml
-# config.yaml
+# settings.yaml
 prompts:
   my_feature: |
     You are an AI assistant. Analyze this code...
@@ -260,7 +260,7 @@ generative_ia "$PROMPT"
 
 ### Existing Prompt Templates
 
-All AI prompts are **externalized** in `config.yaml` under `prompts:`:
+All AI prompts are **externalized** in `settings.yaml` under `prompts:`:
 
 ```yaml
 prompts:
@@ -446,7 +446,7 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
 
 ### New Analysis Type
 
-1. Add to `config.yaml`:
+1. Add to `settings.yaml`:
    ```yaml
    prompts:
      instructions:
@@ -485,7 +485,7 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
    - Timeout handling
    - Cancellation support
    - Error messages via UI functions
-   - **ALL prompts from `config.yaml`** (no hardcoded prompts)
+   - **ALL prompts from `settings.yaml`** (no hardcoded prompts)
 3. Add to `gateways/generative-ia.sh` switch
 4. Document in `README.md`
 
@@ -493,7 +493,7 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
 
 **When adding ANY feature that uses AI:**
 
-1. **Add prompt to `config.yaml`:**
+1. **Add prompt to `settings.yaml`:**
    ```yaml
    prompts:
      new_feature: |
@@ -632,7 +632,7 @@ When adding features, update:
 **Golden Rules:**
 1. ✅ Use ONLY UI functions for output (`ui_*` from `lib/ui.sh`)
 2. ✅ Documentation comments only (NO inline comments)
-3. ✅ ALL AI prompts MUST be in `config.yaml` (NEVER hardcoded)
+3. ✅ ALL AI prompts MUST be in `settings.yaml` (NEVER hardcoded)
 4. ✅ Always validate bash syntax (`bash -n script.sh`)
 5. ✅ Handle cancellation (exit 130)
 6. ✅ Parallelize independent operations when possible
@@ -642,14 +642,14 @@ When adding features, update:
 **When in doubt:**
 - Check existing code patterns
 - Use UI functions from `lib/ui.sh`
-- Put ALL prompts in `config.yaml`
+- Put ALL prompts in `settings.yaml`
 - Test with `bash -n`
 - Document your changes
 
 **Before committing, verify:**
 ```bash
 # No hardcoded prompts in scripts
-grep -r "generative_ia" commands/ | grep -v "config.yaml" | grep '".*You are'
+grep -r "generative_ia" commands/ | grep -v "settings.yaml" | grep '".*You are'
 
 # No echo/printf outside ui.sh
 grep -r "echo\|printf" commands/ --exclude-dir=lib | grep -v "ui.sh"

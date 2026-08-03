@@ -5,7 +5,7 @@
 # configured AI provider. Presents the result for review before creating.
 #
 # Dependencies: git (staged changes required), yq
-# Config:       config.yaml  (prompts.branch)
+# Config:       settings.yaml  (prompts.branch)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
@@ -36,16 +36,6 @@ $USER_CONTEXT
 
 Consider this context when categorizing the changes and suggesting the branch name."
 fi
-
-# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
-# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
-render_template() {
-  local RESULT="$1"; shift
-  while [ $# -ge 2 ]; do
-    RESULT="${RESULT//$1/$2}"; shift 2
-  done
-  ui_print "$RESULT"
-}
 
 PROMPT=$(render_template "$PROMPT_BRANCH_TEMPLATE" \
   "__FILES__"   "$FILES_CHANGED" \

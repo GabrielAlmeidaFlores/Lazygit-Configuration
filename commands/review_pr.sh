@@ -2,16 +2,16 @@
 # review_pr.sh — Interactive AI-powered PR review for Lazygit
 #
 # Lists open PRs, runs focused AI analyses, and posts natural code review
-# comments on the pull request. All AI prompts are configured in config.yaml.
+# comments on the pull request. All AI prompts are configured in settings.yaml.
 # Supports GitHub and Azure DevOps — provider is detected automatically from
 # the git remote URL.
 #
 # Dependencies: fzf, jq, curl, yq  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
-# Config:       config.yaml
+# Config:       settings.yaml
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
@@ -27,16 +27,6 @@ for dep in fzf jq curl yq; do
 done
 
 scm_detect
-
-# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
-# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
-render_template() {
-  local RESULT="$1"; shift
-  while [ $# -ge 2 ]; do
-    RESULT="${RESULT//$1/$2}"; shift 2
-  done
-  ui_print "$RESULT"
-}
 
 ui_header "🔍  AI PR Review"
 ui_spinner_start "Fetching open PRs..."
@@ -386,7 +376,7 @@ _get_analysis_icon() {
 
 # get_instructions ANALYSIS_NAME
 # Returns the instruction text for a given analysis type, sourced from
-# config.yaml variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
+# settings.yaml variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
     "Architecture")       ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;

@@ -1,7 +1,7 @@
 #!/bin/bash
 # lib/config.sh — Configuration loader for AI-powered Lazygit commands
 #
-# Loads all settings from config.yaml via yq and exports them as shell variables
+# Loads all settings from settings.yaml via yq and exports them as shell variables
 # compatible with all existing scripts. Sourced by gateways/generative-ia.sh.
 #
 # Requires: yq (brew install yq)
@@ -22,22 +22,12 @@
 #   config_select_provider
 
 _CFG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_CONFIG_DIR="$(cd "${_CFG_LIB_DIR}/../.." && pwd)"
-_CONFIG_FILE="${_CONFIG_DIR}/config.yaml"
-_CONFIG_STATE="${_CONFIG_DIR}/config.state.yaml"
+_CONFIG_DIR="${_CONFIG_DIR:-$(cd "${_CFG_LIB_DIR}/../.." && pwd)}"
+_CONFIG_FILE="${_CONFIG_FILE:-${_CONFIG_DIR}/settings.yaml}"
+_CONFIG_STATE="${_CONFIG_STATE:-${_CONFIG_DIR}/config.state.yaml}"
 
 if ! command -v ui_error >/dev/null 2>&1; then
   [ -f "${_CFG_LIB_DIR}/ui.sh" ] && source "${_CFG_LIB_DIR}/ui.sh"
-fi
-
-if ! command -v yq &>/dev/null; then
-  ui_error "'yq' not found. Install it: brew install yq"
-  exit 1
-fi
-
-if [ ! -f "$_CONFIG_FILE" ]; then
-  ui_error "config.yaml not found at ${_CONFIG_FILE}"
-  exit 1
 fi
 
 # _cfg_str EXPR FILE
@@ -47,35 +37,92 @@ fi
 _cfg_str() {
   local _v
   _v=$(yq "${1}" "${2}")
-  [ "$_v" = '""' ] || [ "$_v" = "null" ] || ui_print "$_v"
+  [ "$_v" = '""' ] || [ "$_v" = "''" ] || [ "$_v" = "null" ] || ui_print "$_v"
 }
 
-AI_PROVIDER=$(yq '.ai.provider // "copilot"'            "$_CONFIG_FILE")
-MODEL=$(_cfg_str '.ai.model // ""'                      "$_CONFIG_FILE")
-FALLBACK_MODEL=$(_cfg_str '.ai.fallback_model // ""'    "$_CONFIG_FILE")
-MAX_RETRIES=$(yq '.ai.max_retries // 2'                 "$_CONFIG_FILE")
-TIMEOUT=$(yq '.ai.timeout // 60'                        "$_CONFIG_FILE")
-CURSOR_BIN=$(_cfg_str '.providers.cursor.bin // ""'     "$_CONFIG_FILE")
-CURSOR_MODE=$(yq '.providers.cursor.mode // "ask"'      "$_CONFIG_FILE")
-COPILOT_BIN=$(_cfg_str '.providers.copilot.bin // ""'   "$_CONFIG_FILE")
-AZURE_DEVOPS_PAT=$(_cfg_str '.azure_devops.pat // ""'   "$_CONFIG_FILE")
-CURSOR_MODELS=$(yq '.providers.cursor.models // ""'     "$_CONFIG_FILE")
-COPILOT_MODELS=$(yq '.providers.copilot.models // ""'   "$_CONFIG_FILE")
+# _cfg_validate
+# Validates the loaded configuration values. Calls ui_error for each problem
+# found and returns the total number of errors, allowing the caller to exit.
+# Checks: provider name, numeric types, required prompt templates.
+# Exit codes: 0 = all valid, N = number of errors found.
+_cfg_validate() {
+  local _ERRORS=0
 
-PROMPT_COMMIT_TEMPLATE=$(yq '.prompts.commit'                          "$_CONFIG_FILE")
-PROMPT_BRANCH_TEMPLATE=$(yq '.prompts.branch'                          "$_CONFIG_FILE")
-PROMPT_ANALYSIS_TEMPLATE=$(yq '.prompts.analysis_pass1'                "$_CONFIG_FILE")
-PROMPT_ANALYSIS_PASS2_TEMPLATE=$(yq '.prompts.analysis_pass2'          "$_CONFIG_FILE")
-PROMPT_ANALYSIS_PASS3_TEMPLATE=$(yq '.prompts.analysis_pass3'          "$_CONFIG_FILE")
-PROMPT_COMMENT_TEMPLATE=$(yq '.prompts.comment'                        "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_ARCHITECTURE=$(yq '.prompts.instructions.architecture'   "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_SECURITY=$(yq '.prompts.instructions.security'           "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_CODE_QUALITY=$(yq '.prompts.instructions.code_quality'   "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_TEST_COVERAGE=$(yq '.prompts.instructions.test_coverage' "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_PERFORMANCE=$(yq '.prompts.instructions.performance'     "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_SPELLING=$(yq '.prompts.instructions.spelling'           "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_BUGS=$(yq '.prompts.instructions.bugs'                   "$_CONFIG_FILE")
-PROMPT_INSTRUCTIONS_FIX_VALIDATION=$(yq '.prompts.instructions.fix_validation' "$_CONFIG_FILE")
+  case "$AI_PROVIDER" in
+    cursor|copilot) ;;
+    *)
+      ui_error "settings.yaml: ai.provider must be 'cursor' or 'copilot' (got: '${AI_PROVIDER}')"
+      _ERRORS=$((_ERRORS + 1))
+      ;;
+  esac
+
+  if ! [[ "$MAX_RETRIES" =~ ^[0-9]+$ ]] || [ "$MAX_RETRIES" -lt 1 ]; then
+    ui_error "settings.yaml: ai.max_retries must be a positive integer (got: '${MAX_RETRIES}')"
+    _ERRORS=$((_ERRORS + 1))
+  fi
+
+  if ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || [ "$TIMEOUT" -lt 1 ]; then
+    ui_error "settings.yaml: ai.timeout must be a positive integer (got: '${TIMEOUT}')"
+    _ERRORS=$((_ERRORS + 1))
+  fi
+
+  local _KEY _VAR
+  while IFS=: read -r _KEY _VAR; do
+    [ -z "${!_VAR}" ] && ui_error "settings.yaml: ${_KEY} is empty or missing" && _ERRORS=$((_ERRORS + 1))
+  done <<'EOF'
+prompts.commit:PROMPT_COMMIT_TEMPLATE
+prompts.branch:PROMPT_BRANCH_TEMPLATE
+prompts.analysis_pass1:PROMPT_ANALYSIS_TEMPLATE
+prompts.analysis_pass2:PROMPT_ANALYSIS_PASS2_TEMPLATE
+prompts.analysis_pass3:PROMPT_ANALYSIS_PASS3_TEMPLATE
+prompts.comment:PROMPT_COMMENT_TEMPLATE
+EOF
+
+  return $_ERRORS
+}
+
+if [ "${_CFG_SKIP_LOAD:-0}" != "1" ]; then
+
+  if ! command -v yq &>/dev/null; then
+    ui_error "'yq' not found. Install it: brew install yq"
+    exit 1
+  fi
+
+  if [ ! -f "$_CONFIG_FILE" ]; then
+    ui_error "settings.yaml not found at ${_CONFIG_FILE}"
+    exit 1
+  fi
+
+  AI_PROVIDER=$(yq '.ai.provider // "copilot"'            "$_CONFIG_FILE")
+  MODEL=$(_cfg_str '.ai.model // ""'                      "$_CONFIG_FILE")
+  FALLBACK_MODEL=$(_cfg_str '.ai.fallback_model // ""'    "$_CONFIG_FILE")
+  MAX_RETRIES=$(yq '.ai.max_retries // 2'                 "$_CONFIG_FILE")
+  TIMEOUT=$(yq '.ai.timeout // 60'                        "$_CONFIG_FILE")
+  CURSOR_BIN=$(_cfg_str '.providers.cursor.bin // ""'     "$_CONFIG_FILE")
+  CURSOR_MODE=$(yq '.providers.cursor.mode // "ask"'      "$_CONFIG_FILE")
+  COPILOT_BIN=$(_cfg_str '.providers.copilot.bin // ""'   "$_CONFIG_FILE")
+  AZURE_DEVOPS_PAT=$(_cfg_str '.azure_devops.pat // ""'   "$_CONFIG_FILE")
+  CURSOR_MODELS=$(yq '.providers.cursor.models // ""'     "$_CONFIG_FILE")
+  COPILOT_MODELS=$(yq '.providers.copilot.models // ""'   "$_CONFIG_FILE")
+
+  PROMPT_COMMIT_TEMPLATE=$(yq '.prompts.commit'                            "$_CONFIG_FILE")
+  PROMPT_BRANCH_TEMPLATE=$(yq '.prompts.branch'                            "$_CONFIG_FILE")
+  PROMPT_ANALYSIS_TEMPLATE=$(yq '.prompts.analysis_pass1'                  "$_CONFIG_FILE")
+  PROMPT_ANALYSIS_PASS2_TEMPLATE=$(yq '.prompts.analysis_pass2'            "$_CONFIG_FILE")
+  PROMPT_ANALYSIS_PASS3_TEMPLATE=$(yq '.prompts.analysis_pass3'            "$_CONFIG_FILE")
+  PROMPT_COMMENT_TEMPLATE=$(yq '.prompts.comment'                          "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_ARCHITECTURE=$(yq '.prompts.instructions.architecture'   "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_SECURITY=$(yq '.prompts.instructions.security'           "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_CODE_QUALITY=$(yq '.prompts.instructions.code_quality'   "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_TEST_COVERAGE=$(yq '.prompts.instructions.test_coverage' "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_PERFORMANCE=$(yq '.prompts.instructions.performance'     "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_SPELLING=$(yq '.prompts.instructions.spelling'           "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_BUGS=$(yq '.prompts.instructions.bugs'                   "$_CONFIG_FILE")
+  PROMPT_INSTRUCTIONS_FIX_VALIDATION=$(yq '.prompts.instructions.fix_validation' "$_CONFIG_FILE")
+
+  _cfg_validate || exit 1
+
+fi
 
 # config_select_provider
 # Shows an fzf picker for the AI provider, pre-selecting the last used value

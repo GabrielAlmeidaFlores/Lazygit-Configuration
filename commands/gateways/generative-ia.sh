@@ -2,10 +2,10 @@
 # generative-ia.sh — Gateway for AI/LLM services
 #
 # Routes calls to the active provider adapter based on AI_PROVIDER, which is
-# loaded from config.yaml via lib/config.sh and set interactively at runtime.
+# loaded from settings.yaml via lib/config.sh and set interactively at runtime.
 # Supported providers: cursor | copilot
 #
-# Configuration: config.yaml (loaded via commands/lib/config.sh)
+# Configuration: settings.yaml (loaded via commands/lib/config.sh)
 #
 # generative_ia PROMPT [VERBOSE]
 #   Sends PROMPT to the configured provider and prints the response to stdout.
@@ -19,7 +19,7 @@
 # Standalone usage:
 #   ./generative-ia.sh "prompt" [1]
 
-export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 _GW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -29,22 +29,27 @@ if ! command -v ui_error >/dev/null 2>&1; then
 fi
 
 source "$_GW_DIR/../lib/config.sh"
+source "$_GW_DIR/../lib/utils.sh"
+
+_LOADED_PROVIDER=""
 
 # generative_ia PROMPT [VERBOSE]
-# Public entry point. Resolves AI_PROVIDER at call time, loads the matching
-# adapter, and dispatches the request. This late binding ensures the provider
-# selected interactively by config_select_provider is always honoured.
+# Public entry point. Resolves AI_PROVIDER at call time and dispatches to the
+# matching adapter. The adapter is sourced only when the provider changes,
+# avoiding redundant file reads across multiple calls in the same session.
 generative_ia() {
   local _PROVIDER="${AI_PROVIDER:-copilot}"
   local _ADAPTER_FILE="$_GW_DIR/adapters/ia/${_PROVIDER}.sh"
 
-  if [ ! -f "$_ADAPTER_FILE" ]; then
-    ui_error "Adapter for provider '${_PROVIDER}' not found at ${_ADAPTER_FILE}" >&2
-    ui_info "Supported providers: cursor, copilot" >&2
-    return 1
+  if [ "$_PROVIDER" != "$_LOADED_PROVIDER" ]; then
+    if [ ! -f "$_ADAPTER_FILE" ]; then
+      ui_error "Adapter for provider '${_PROVIDER}' not found at ${_ADAPTER_FILE}" >&2
+      ui_info "Supported providers: cursor, copilot" >&2
+      return 1
+    fi
+    source "$_ADAPTER_FILE"
+    _LOADED_PROVIDER="$_PROVIDER"
   fi
-
-  source "$_ADAPTER_FILE"
 
   case "$_PROVIDER" in
     cursor)  _generative_ia_cursor  "$@" ;;

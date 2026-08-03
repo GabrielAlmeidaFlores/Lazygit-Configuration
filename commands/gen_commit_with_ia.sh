@@ -7,7 +7,7 @@
 # exists for the current branch.
 #
 # Dependencies: git (staged changes required), yq
-# Config:       config.yaml  (prompts.commit)
+# Config:       settings.yaml  (prompts.commit)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
@@ -33,16 +33,6 @@ USER_CONTEXT="$UI_INPUT"
 VERBOSE=1
 CONTEXT_SECTION=""
 [ -n "$USER_CONTEXT" ] && CONTEXT_SECTION="USER PROVIDED CONTEXT: $USER_CONTEXT"
-
-# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
-# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
-render_template() {
-  local RESULT="$1"; shift
-  while [ $# -ge 2 ]; do
-    RESULT="${RESULT//$1/$2}"; shift 2
-  done
-  ui_print "$RESULT"
-}
 
 PROMPT=$(render_template "$PROMPT_COMMIT_TEMPLATE" \
   "__DIFF__"    "$DIFF_SNIPPET" \

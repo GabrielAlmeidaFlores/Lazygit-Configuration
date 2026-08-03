@@ -1,7 +1,7 @@
 #!/bin/bash
 # copilot.sh — GitHub Copilot CLI adapter for generative_ia
 #
-# Configuration (via config.yaml → loaded by lib/config.sh):
+# Configuration (via settings.yaml → loaded by lib/config.sh):
 #   MODEL          — Primary model    (empty = Copilot default)
 #   FALLBACK_MODEL — Fallback model   (empty = no fallback)
 #   MAX_RETRIES    — Retry attempts per model  (default: 2)

@@ -1,4 +1,4 @@
-# config.yaml — Main configuration for the AI-powered Lazygit commands
+# settings.yaml — Main configuration for the AI-powered Lazygit commands
 #
 # Edit this file to customize AI prompts, model lists, and provider settings.
 # Provider selection at runtime is interactive (fzf) and persisted in config.state.yaml.
