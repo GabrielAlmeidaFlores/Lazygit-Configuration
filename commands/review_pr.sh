@@ -390,7 +390,7 @@ get_instructions() {
   esac
 }
 
-# run_analysis ANALYSIS_NAME INSTRUCTIONS
+# run_analysis ANALYSIS_NAME INSTRUCTIONS CURRENT_INDEX TOTAL_ANALYSES
 # Runs 3 sequential AI passes for the given analysis type:
 #   Pass 1 — initial analysis of the diff
 #   Pass 2 — second analysis informed by Pass 1 findings
@@ -400,6 +400,10 @@ get_instructions() {
 run_analysis() {
   local ANALYSIS_NAME="$1"
   local INSTRUCTIONS="$2"
+  local _IDX="$3"
+  local _TOT="$4"
+  local _PCT=$(( _IDX * 100 / _TOT ))
+  local _PROGRESS="[${_IDX}/${_TOT} — ${_PCT}%]"
   local ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
 
   # _ai_call PROMPT
@@ -434,7 +438,7 @@ run_analysis() {
   }
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -456,7 +460,7 @@ run_analysis() {
 ${P1_ISSUES}"
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -481,7 +485,7 @@ $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -521,12 +525,14 @@ $P2_ISSUES" \
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
 ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses..."
 
+ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
   [ -z "$ANALYSIS" ] && continue
   ANALYSES_ORDER+=("$ANALYSIS")
   INSTRUCTIONS=$(get_instructions "$ANALYSIS")
+  ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
 
-  run_analysis "$ANALYSIS" "$INSTRUCTIONS"
+  run_analysis "$ANALYSIS" "$INSTRUCTIONS" "$ANALYSIS_INDEX" "$TOTAL_ANALYSES"
   ANALYSIS_EC=$?
 
   if [ $ANALYSIS_EC -eq 130 ]; then

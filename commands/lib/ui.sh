@@ -296,7 +296,10 @@ ui_checklist_start() {
 # ui_checklist_item "text"
 # Renders a single [ ] item row inside a checklist box.
 # Long items are word-wrapped; continuation lines are indented to align
-# with the text start (after the "[ ] " prefix).
+# with the text start (after the "[ ] " prefix). All lines are folded at
+# CONT_W (the narrower continuation width) so that no chunk can overflow
+# the box regardless of which line it falls on. _display_width is used for
+# padding to correctly account for double-width characters such as emoji.
 ui_checklist_item() {
   local TEXT="$1"
   local FIRST_W=$((_IW - 4))
@@ -304,14 +307,16 @@ ui_checklist_item() {
   [ $FIRST_W -lt 4 ] && FIRST_W=4
   [ $CONT_W  -lt 4 ] && CONT_W=4
   local IS_FIRST=1
-  printf '%s' "$TEXT" | fold -s -w $FIRST_W | while IFS= read -r CHUNK; do
+  printf '%s' "$TEXT" | fold -s -w $CONT_W | while IFS= read -r CHUNK; do
+    local CHUNK_W PAD
+    CHUNK_W=$(_display_width "$CHUNK")
     if [ "$IS_FIRST" = "1" ]; then
-      local PAD=$(($FIRST_W - ${#CHUNK}))
+      PAD=$(($FIRST_W - CHUNK_W))
       [ $PAD -lt 0 ] && PAD=0
       printf "  │  ${_CD}[ ]${_C0} %s%${PAD}s  │\n" "$CHUNK" ""
       IS_FIRST=0
     else
-      local PAD=$(($CONT_W - ${#CHUNK}))
+      PAD=$(($CONT_W - CHUNK_W))
       [ $PAD -lt 0 ] && PAD=0
       printf "  │       %s%${PAD}s  │\n" "$CHUNK" ""
     fi
