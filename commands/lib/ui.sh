@@ -332,12 +332,17 @@ ui_checklist_end() {
 
 # ui_code_snippet "filename" "diff_lines"
 # Renders a bordered code block. Lines starting with + are green, - are red.
+# Content is capped at 90 columns regardless of terminal width so that
+# deeply-indented source lines (e.g. TypeScript nested closures) never
+# produce an unreadable wide box.
 ui_code_snippet() {
   local FILENAME="$1" CODE="$2"
   [ -z "$CODE" ] && return
+  local _SNIP_IW=$(( _IW < 90 ? _IW : 90 ))
+  local _SNIP_W=$(( _SNIP_IW + 8 ))
   local FW DASHES
   FW=$(_display_width "$FILENAME")
-  DASHES=$((_W - FW - 9))
+  DASHES=$((_SNIP_W - FW - 9))
   [ $DASHES -lt 1 ] && DASHES=1
   echo ""
   printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
@@ -349,17 +354,17 @@ ui_code_snippet() {
     esac
     local LW STRIPPED PAD
     LW=$(_display_width "$LINE")
-    if [ "$LW" -gt "$_IW" ] 2>/dev/null; then
-      STRIPPED="${LINE:0:$((_IW-3))}..."
-      LW=$_IW
+    if [ "$LW" -gt "$_SNIP_IW" ] 2>/dev/null; then
+      STRIPPED="${LINE:0:$((_SNIP_IW-3))}..."
+      LW=$_SNIP_IW
     else
       STRIPPED="$LINE"
     fi
-    PAD=$((_IW - LW))
+    PAD=$((_SNIP_IW - LW))
     [ $PAD -lt 0 ] && PAD=0
     printf "  │  ${COLOR}%s${_C0}%${PAD}s  │\n" "$STRIPPED" ""
   done <<< "$CODE"
-  _bot
+  printf "  ╰%s╯\n" "$(_rep $((_SNIP_W-4)) '─')"
   echo ""
 }
 
