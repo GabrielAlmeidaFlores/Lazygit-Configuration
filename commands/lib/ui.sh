@@ -334,11 +334,14 @@ ui_checklist_end() {
 # Renders a bordered code block. Lines starting with + are green, - are red.
 # Content is capped at 90 columns regardless of terminal width so that
 # deeply-indented source lines (e.g. TypeScript nested closures) never
-# produce an unreadable wide box. Carriage returns (\r) are stripped before
-# processing to prevent CRLF line endings from corrupting the box alignment.
+# produce an unreadable wide box. Carriage returns are stripped from the
+# entire CODE block before processing to handle CRLF diffs robustly.
+# Line width uses ${#LINE} (character count) to avoid subprocess failures
+# that would cause silent truncation bypass.
 ui_code_snippet() {
   local FILENAME="$1" CODE="$2"
   [ -z "$CODE" ] && return
+  CODE="${CODE//$'\r'/}"
   local _SNIP_IW=$(( _IW < 90 ? _IW : 90 ))
   local _SNIP_W=$(( _SNIP_IW + 8 ))
   local FW DASHES
@@ -348,15 +351,14 @@ ui_code_snippet() {
   echo ""
   printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
   while IFS= read -r LINE; do
-    LINE="${LINE//$'\r'/}"
     local COLOR="$_CD"
     case "$LINE" in
       "+"*) COLOR="$_CG" ;;
       "-"*) COLOR="$_CR" ;;
     esac
     local LW STRIPPED PAD
-    LW=$(_display_width "$LINE")
-    if [ "$LW" -gt "$_SNIP_IW" ] 2>/dev/null; then
+    LW=${#LINE}
+    if [ "$LW" -gt "$_SNIP_IW" ]; then
       STRIPPED="${LINE:0:$((_SNIP_IW-3))}..."
       LW=$_SNIP_IW
     else

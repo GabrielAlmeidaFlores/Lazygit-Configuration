@@ -151,6 +151,13 @@ prompts:
     FOCUS:
     __INSTRUCTIONS__
 
+    STRICT RULE ON COMMENTS: Do NOT report missing comments as issues. Never suggest
+    adding inline comments, explanatory comments, or any kind of comment to the code.
+    The only exception: if the project already uses official documentation comments
+    (JSDoc, TSDoc, etc.) in the diffed files AND the changed code is missing a
+    documentation comment that follows that exact same format. In all other cases,
+    treat absent comments as acceptable and ignore them entirely.
+
     YOUR RESPONSE MUST START WITH ONE OF THESE TWO LINES — no other text before it:
 
       ANALYSIS_STATUS: OK
@@ -192,6 +199,13 @@ prompts:
 
     FOCUS:
     __INSTRUCTIONS__
+
+    STRICT RULE ON COMMENTS: Do NOT report missing comments as issues. Never suggest
+    adding inline comments, explanatory comments, or any kind of comment to the code.
+    The only exception: if the project already uses official documentation comments
+    (JSDoc, TSDoc, etc.) in the diffed files AND the changed code is missing a
+    documentation comment that follows that exact same format. In all other cases,
+    treat absent comments as acceptable and ignore them entirely.
 
     FIRST PASS FINDINGS:
     __PASS1_RESULT__
@@ -237,6 +251,13 @@ prompts:
 
     FOCUS:
     __INSTRUCTIONS__
+
+    STRICT RULE ON COMMENTS: Do NOT report missing comments as issues. Never suggest
+    adding inline comments, explanatory comments, or any kind of comment to the code.
+    The only exception: if the project already uses official documentation comments
+    (JSDoc, TSDoc, etc.) in the diffed files AND the changed code is missing a
+    documentation comment that follows that exact same format. In all other cases,
+    treat absent comments as acceptable and ignore them entirely.
 
     COMBINED ISSUES FROM PREVIOUS ANALYSES (may contain false positives):
     __COMBINED_ISSUES__
