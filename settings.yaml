@@ -294,6 +294,10 @@ prompts:
     - State the problem clearly and optionally hint at the fix
     - Never use em dashes (—)
     - Do not use emojis or special icons
+    - Do NOT include terminal commands, shell scripts, grep invocations, or command-line examples
+    - Do NOT include tool output, file search results, or verification steps
+    - Do NOT use code blocks, backtick fences, or any formatted output blocks
+    - Output ONLY the plain comment text — nothing else
 
   # ─── Per-analysis instructions ───────────────────────────────────────────────
 

@@ -334,7 +334,8 @@ ui_checklist_end() {
 # Renders a bordered code block. Lines starting with + are green, - are red.
 # Content is capped at 90 columns regardless of terminal width so that
 # deeply-indented source lines (e.g. TypeScript nested closures) never
-# produce an unreadable wide box.
+# produce an unreadable wide box. Carriage returns (\r) are stripped before
+# processing to prevent CRLF line endings from corrupting the box alignment.
 ui_code_snippet() {
   local FILENAME="$1" CODE="$2"
   [ -z "$CODE" ] && return
@@ -347,6 +348,7 @@ ui_code_snippet() {
   echo ""
   printf "  ╭─  ${_CD}%s${_C0}  %s╮\n" "$FILENAME" "$(_rep $DASHES '─')"
   while IFS= read -r LINE; do
+    LINE="${LINE//$'\r'/}"
     local COLOR="$_CD"
     case "$LINE" in
       "+"*) COLOR="$_CG" ;;

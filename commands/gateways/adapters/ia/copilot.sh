@@ -78,7 +78,7 @@ _generative_ia_copilot() {
       [ $_CANCELLED -eq 1 ] && break
 
       local RESPONSE
-      RESPONSE=$(grep -vE '^(Changes[[:space:]]|AI Credits[[:space:]]|Tokens[[:space:]]|Resume[[:space:]]+copilot|●|│|└|/ [A-Za-z])' "$_TEMP_OUT" \
+      RESPONSE=$(grep -vE '(│|└|●)|^(Changes[[:space:]]|AI Credits[[:space:]]|Tokens[[:space:]]|Resume[[:space:]]+copilot|/ [A-Za-z])' "$_TEMP_OUT" \
         | sed '/./,$ !d' \
         | sed -e 's/[[:space:]]*$//' \
         | awk 'NF{last=NR} {lines[NR]=$0} END{for(i=1;i<=last;i++) print lines[i]}')
