@@ -2,16 +2,16 @@
 # review_pr.sh — Interactive AI-powered PR review for Lazygit
 #
 # Lists open PRs, runs focused AI analyses, and posts natural code review
-# comments on the pull request. All AI prompts are configured in config.env.
+# comments on the pull request. All AI prompts are configured in settings.yaml.
 # Supports GitHub and Azure DevOps — provider is detected automatically from
 # the git remote URL.
 #
-# Dependencies: fzf, jq, curl  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
-# Config:       commands/config.env
+# Dependencies: fzf, jq, curl, yq  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
+# Config:       settings.yaml
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
@@ -19,7 +19,7 @@ source "$SCRIPT_DIR/gateways/adapters/scm/gateway.sh"
 
 clear
 
-for dep in fzf jq curl; do
+for dep in fzf jq curl yq; do
   if ! command -v "$dep" &>/dev/null; then
     ui_error "'$dep' not found. Please install it before continuing."
     exit 1
@@ -27,16 +27,6 @@ for dep in fzf jq curl; do
 done
 
 scm_detect
-
-# render_template TEMPLATE KEY1 VAL1 [KEY2 VAL2 ...]
-# Replaces all __KEY__ placeholders in TEMPLATE with their corresponding values.
-render_template() {
-  local RESULT="$1"; shift
-  while [ $# -ge 2 ]; do
-    RESULT="${RESULT//$1/$2}"; shift 2
-  done
-  ui_print "$RESULT"
-}
 
 ui_header "🔍  AI PR Review"
 ui_spinner_start "Fetching open PRs..."
@@ -64,7 +54,8 @@ SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
 PR_NUMBER=$(ui_print "$SELECTED_PR" | grep -oE '^#[0-9]+' | tr -d '#')
 PR_TITLE=$(ui_print "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
-CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
+config_select_provider || { ui_cancel; exit 0; }
+CURRENT_PROVIDER="$AI_PROVIDER"
 
 DEFAULT_CURSOR_MODELS="default
 gpt-4o-mini  (low — fast and economical)
@@ -385,7 +376,7 @@ _get_analysis_icon() {
 
 # get_instructions ANALYSIS_NAME
 # Returns the instruction text for a given analysis type, sourced from
-# config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
+# settings.yaml variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
     "Architecture")       ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
@@ -399,7 +390,7 @@ get_instructions() {
   esac
 }
 
-# run_analysis ANALYSIS_NAME INSTRUCTIONS
+# run_analysis ANALYSIS_NAME INSTRUCTIONS CURRENT_INDEX TOTAL_ANALYSES
 # Runs 3 sequential AI passes for the given analysis type:
 #   Pass 1 — initial analysis of the diff
 #   Pass 2 — second analysis informed by Pass 1 findings
@@ -409,6 +400,10 @@ get_instructions() {
 run_analysis() {
   local ANALYSIS_NAME="$1"
   local INSTRUCTIONS="$2"
+  local _IDX="$3"
+  local _TOT="$4"
+  local _PCT=$(( _IDX * 100 / _TOT ))
+  local _PROGRESS="[${_IDX}/${_TOT} — ${_PCT}%]"
   local ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
 
   # _ai_call PROMPT
@@ -443,7 +438,7 @@ run_analysis() {
   }
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3" >&2
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -456,6 +451,7 @@ run_analysis() {
 
   _ai_call "$P1_PROMPT"
   local P1_EC=$?
+  ui_spinner_stop
   [ $P1_EC -eq 130 ] && return 130
   [ $P1_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P1_STATUS="$_AI_STATUS" P1_ISSUES="$_AI_ISSUES"
@@ -464,7 +460,7 @@ run_analysis() {
 ${P1_ISSUES}"
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3" >&2
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -478,6 +474,7 @@ ${P1_ISSUES}"
 
   _ai_call "$P2_PROMPT"
   local P2_EC=$?
+  ui_spinner_stop
   [ $P2_EC -eq 130 ] && return 130
   [ $P2_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P2_ISSUES="$_AI_ISSUES"
@@ -488,7 +485,7 @@ $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3" >&2
+  ui_spinner_start "${_PROGRESS}  ${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -502,6 +499,7 @@ $P2_ISSUES" \
 
   _ai_call "$P3_PROMPT"
   local P3_EC=$?
+  ui_spinner_stop
   [ $P3_EC -eq 130 ] && return 130
 
   local FINAL_STATUS FINAL_ISSUES
@@ -524,38 +522,24 @@ $P2_ISSUES" \
   fi
 }
 
-ANALYSIS_PIDS=()
-ANALYSIS_EXIT_CODES=()
-
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
+ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses..."
 
 ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
   [ -z "$ANALYSIS" ] && continue
   ANALYSES_ORDER+=("$ANALYSIS")
   INSTRUCTIONS=$(get_instructions "$ANALYSIS")
-
-  (
-    run_analysis "$ANALYSIS" "$INSTRUCTIONS"
-    exit $?
-  ) &
-
-  ANALYSIS_PIDS[$ANALYSIS_INDEX]=$!
   ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
-done <<< "$ANALYSES_RAW"
 
-for i in "${!ANALYSIS_PIDS[@]}"; do
-  wait "${ANALYSIS_PIDS[$i]}"
-  ANALYSIS_EXIT_CODES[$i]=$?
-done
+  run_analysis "$ANALYSIS" "$INSTRUCTIONS" "$ANALYSIS_INDEX" "$TOTAL_ANALYSES"
+  ANALYSIS_EC=$?
 
-for EXIT_CODE in "${ANALYSIS_EXIT_CODES[@]}"; do
-  if [ $EXIT_CODE -eq 130 ]; then
+  if [ $ANALYSIS_EC -eq 130 ]; then
     ui_cancel
     exit 0
   fi
-done
+done <<< "$ANALYSES_RAW"
 
 for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"

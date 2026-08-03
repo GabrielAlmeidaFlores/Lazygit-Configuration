@@ -116,18 +116,21 @@ VALUE=$(get_value)
 ```
 commands/
 ├── lib/
-│   └── ui.sh                    # UI functions (ONLY file with echo/printf)
+│   ├── ui.sh                    # UI functions (ONLY file with echo/printf)
+│   └── config.sh                # Config loader (reads settings.yaml via yq)
 ├── gateways/
 │   ├── generative-ia.sh         # AI gateway (routes to providers)
 │   └── adapters/
 │       ├── copilot.sh           # GitHub Copilot adapter
 │       ├── cursor.sh            # Cursor Agent adapter
 │       └── _helpers.sh          # Shared adapter utilities
-├── review_pr.sh                 # PR review with parallel analysis
+├── review_pr.sh                 # PR review with sequential analysis
 ├── gen_commit_with_ia.sh        # AI commit message generator
 └── gen_branch_with_ia.sh        # AI branch name generator
 
-config.env                       # All AI prompts and configuration
+settings.yaml                      # All AI prompts and configuration (replaces config.env)
+config.state.yaml                # Runtime state: last used provider/model (gitignored)
+config.state.yaml.example        # Template for config.state.yaml
 config.yml                       # LazyGit UI configuration
 state.yml                        # Auto-generated (gitignored)
 ```
@@ -137,12 +140,13 @@ state.yml                        # Auto-generated (gitignored)
 **AI provider abstraction for easy swapping and testing.**
 
 ```
-User Script → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor)
+User Script → config_select_provider() → AI_PROVIDER set interactively
+           → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor)
 ```
 
-#### Configuration (`config.env`)
+#### Configuration (`settings.yaml` → `lib/config.sh`)
 ```bash
-AI_PROVIDER="copilot"    # or "cursor"
+AI_PROVIDER="copilot"    # set at runtime via fzf picker; persisted in config.state.yaml
 MODEL=""                 # Primary model
 FALLBACK_MODEL=""        # Fallback on failure
 MAX_RETRIES=2
@@ -151,10 +155,11 @@ TIMEOUT=60
 
 #### Adding New Providers
 
-1. Create `gateways/adapters/provider.sh`
+1. Create `gateways/adapters/ia/provider.sh`
 2. Implement `_generative_ia_provider()` function
 3. Add case in `gateways/generative-ia.sh`
-4. Source UI functions: `source "$(dirname)/../../lib/ui.sh"`
+4. Add provider to `config_select_provider` list in `lib/config.sh`
+5. Source UI functions: `source "$(dirname)/../../lib/ui.sh"`
 
 ---
 
@@ -173,29 +178,9 @@ Each analysis type runs **three sequential passes**:
 - Reduces false positives
 - Provides multiple perspectives on the same code
 
-### Parallel Execution
+### Sequential Execution
 
-Multiple analysis types run **in parallel** using bash background jobs:
-
-```bash
-# Each analysis runs in a subshell
-(
-  run_analysis "$ANALYSIS" "$INSTRUCTIONS"
-  exit $?
-) &
-
-PIDS+=($!)
-
-# Wait for all to complete
-for pid in "${PIDS[@]}"; do
-  wait "$pid"
-done
-```
-
-**Benefits:**
-- ~66% faster for multiple analyses
-- Better resource utilization
-- Independent failure handling
+Analysis types run **sequentially**, one at a time. Each analysis is run to completion before the next begins, enabling cancellation between analyses and proper spinner feedback per pass.
 
 ### Available Analysis Types
 
@@ -213,7 +198,7 @@ Spelling & Grammar # Typos, missing accents, language detection
 ### Data Flow
 
 ```
-1. User selects PR → 2. Fetch diff + existing comments via gh → 3. Launch parallel analyses
+1. User selects PR → 2. Fetch diff + existing comments via gh → 3. Launch sequential analyses
                                                                         ↓
 4. Each analysis runs 3 passes (with existing comments context) → 5. Write results to temp files
                                                                         ↓
@@ -241,9 +226,9 @@ $RESULTS_DIR/
 
 ## Configuration Management
 
-### ⚠️ CRITICAL RULE: ALL AI Prompts in `config.env`
+### ⚠️ CRITICAL RULE: ALL AI Prompts in `settings.yaml`
 
-**MANDATORY: Every single AI prompt MUST be defined in `config.env`.**
+**MANDATORY: Every single AI prompt MUST be defined in `settings.yaml`.**
 
 ❌ **NEVER hardcode prompts in scripts:**
 ```bash
@@ -252,11 +237,15 @@ PROMPT="You are an AI assistant. Analyze this code..."
 generative_ia "$PROMPT"
 ```
 
-✅ **ALWAYS externalize in config.env:**
-```bash
-# config.env
-PROMPT_MY_FEATURE="You are an AI assistant. Analyze this code..."
+✅ **ALWAYS externalize in settings.yaml:**
+```yaml
+# settings.yaml
+prompts:
+  my_feature: |
+    You are an AI assistant. Analyze this code...
+```
 
+```bash
 # script.sh
 PROMPT="$PROMPT_MY_FEATURE"
 generative_ia "$PROMPT"
@@ -271,26 +260,33 @@ generative_ia "$PROMPT"
 
 ### Existing Prompt Templates
 
-All AI prompts are **externalized** in `config.env`:
+All AI prompts are **externalized** in `settings.yaml` under `prompts:`:
 
-```bash
-PROMPT_ANALYSIS_TEMPLATE="..."           # Pass 1 prompt
-PROMPT_ANALYSIS_PASS2_TEMPLATE="..."     # Pass 2 prompt
-PROMPT_ANALYSIS_PASS3_TEMPLATE="..."     # Pass 3 prompt
-PROMPT_COMMENT_TEMPLATE="..."            # GitHub comment generation
-PROMPT_COMMIT_TEMPLATE="..."             # Commit message generation
-PROMPT_BRANCH_TEMPLATE="..."             # Branch name generation
+```yaml
+prompts:
+  analysis_pass1: |    # Pass 1 prompt
+  analysis_pass2: |    # Pass 2 prompt
+  analysis_pass3: |    # Pass 3 prompt
+  comment: |           # GitHub comment generation
+  commit: |            # Commit message generation
+  branch: |            # Branch name generation
+  instructions:
+    architecture: |
+    security: |
+    ...
 ```
 
 ### Per-Analysis Instructions
 
-```bash
-PROMPT_INSTRUCTIONS_ARCHITECTURE="..."
-PROMPT_INSTRUCTIONS_SECURITY="..."
-PROMPT_INSTRUCTIONS_CODE_QUALITY="..."
-PROMPT_INSTRUCTIONS_TEST_COVERAGE="..."
-PROMPT_INSTRUCTIONS_PERFORMANCE="..."
-PROMPT_INSTRUCTIONS_SPELLING="..."
+```yaml
+prompts:
+  instructions:
+    architecture: |
+    security: |
+    code_quality: |
+    test_coverage: |
+    performance: |
+    spelling: |
 ```
 
 ### Template Placeholders
@@ -450,9 +446,12 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
 
 ### New Analysis Type
 
-1. Add to `config.env`:
-   ```bash
-   PROMPT_INSTRUCTIONS_NEWTYPE="Check for: ..."
+1. Add to `settings.yaml`:
+   ```yaml
+   prompts:
+     instructions:
+       newtype: |
+         Check for: ...
    ```
 
 2. Add to analysis menu in `review_pr.sh`:
@@ -480,13 +479,13 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
 
 ### New AI Provider
 
-1. Create `gateways/adapters/newprovider.sh`
+1. Create `gateways/adapters/ia/newprovider.sh`
 2. Implement `_generative_ia_newprovider()` with:
    - Retry logic
    - Timeout handling
    - Cancellation support
    - Error messages via UI functions
-   - **ALL prompts from `config.env`** (no hardcoded prompts)
+   - **ALL prompts from `settings.yaml`** (no hardcoded prompts)
 3. Add to `gateways/generative-ia.sh` switch
 4. Document in `README.md`
 
@@ -494,9 +493,11 @@ printf '%s' "⚡" | od -A n -t x1 | head -1  # shows: e2 9a a1     ← avoid
 
 **When adding ANY feature that uses AI:**
 
-1. **Add prompt to `config.env`:**
-   ```bash
-   PROMPT_NEW_FEATURE="Your AI instruction here..."
+1. **Add prompt to `settings.yaml`:**
+   ```yaml
+   prompts:
+     new_feature: |
+       Your AI instruction here...
    ```
 
 2. **Use in script:**
@@ -631,7 +632,7 @@ When adding features, update:
 **Golden Rules:**
 1. ✅ Use ONLY UI functions for output (`ui_*` from `lib/ui.sh`)
 2. ✅ Documentation comments only (NO inline comments)
-3. ✅ ALL AI prompts MUST be in `config.env` (NEVER hardcoded)
+3. ✅ ALL AI prompts MUST be in `settings.yaml` (NEVER hardcoded)
 4. ✅ Always validate bash syntax (`bash -n script.sh`)
 5. ✅ Handle cancellation (exit 130)
 6. ✅ Parallelize independent operations when possible
@@ -641,14 +642,14 @@ When adding features, update:
 **When in doubt:**
 - Check existing code patterns
 - Use UI functions from `lib/ui.sh`
-- Put ALL prompts in `config.env`
+- Put ALL prompts in `settings.yaml`
 - Test with `bash -n`
 - Document your changes
 
 **Before committing, verify:**
 ```bash
 # No hardcoded prompts in scripts
-grep -r "generative_ia" commands/ | grep -v "config.env" | grep '".*You are'
+grep -r "generative_ia" commands/ | grep -v "settings.yaml" | grep '".*You are'
 
 # No echo/printf outside ui.sh
 grep -r "echo\|printf" commands/ --exclude-dir=lib | grep -v "ui.sh"

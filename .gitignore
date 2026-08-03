@@ -1,6 +1,9 @@
 # LazyGit state file (contains user-specific paths and cache)
 state.yml
 
+# AI provider/model state (auto-generated at runtime, machine-specific)
+config.state.yaml
+
 # Temporary files
 *.tmp
 .DS_Store

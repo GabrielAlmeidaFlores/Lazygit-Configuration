@@ -1,15 +1,11 @@
 #!/bin/bash
 # generative-ia.sh — Gateway for AI/LLM services
 #
-# Routes calls to the active provider adapter based on AI_PROVIDER in config.env.
+# Routes calls to the active provider adapter based on AI_PROVIDER, which is
+# loaded from settings.yaml via lib/config.sh and set interactively at runtime.
 # Supported providers: cursor | copilot
 #
-# Configuration (via commands/config.env):
-#   AI_PROVIDER    — Active provider: cursor | copilot  (default: copilot)
-#   MODEL          — Primary model   (empty = provider default)
-#   FALLBACK_MODEL — Fallback model  (empty = no fallback)
-#   MAX_RETRIES    — Retry attempts per model  (default: 2)
-#   TIMEOUT        — Request timeout in seconds  (default: 60)
+# Configuration: settings.yaml (loaded via commands/lib/config.sh)
 #
 # generative_ia PROMPT [VERBOSE]
 #   Sends PROMPT to the configured provider and prints the response to stdout.
@@ -23,7 +19,7 @@
 # Standalone usage:
 #   ./generative-ia.sh "prompt" [1]
 
-export PATH="/Users/gabrielfloresousion/homebrew/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 _GW_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -32,43 +28,34 @@ if ! command -v ui_error >/dev/null 2>&1; then
   [ -f "$_UI_LIB" ] && source "$_UI_LIB"
 fi
 
-CONFIG_FILE="$_GW_DIR/../../config.env"
+source "$_GW_DIR/../lib/config.sh"
+source "$_GW_DIR/../lib/utils.sh"
 
-if [ -f "$CONFIG_FILE" ]; then
-  source "$CONFIG_FILE"
-else
-  if command -v ui_warning >/dev/null 2>&1; then
-    ui_warning "config.env not found at $CONFIG_FILE, using defaults" >&2
-  fi
-  MAX_RETRIES=2
-  TIMEOUT=60
-fi
-
-PROVIDER="${AI_PROVIDER:-copilot}"
-ADAPTER_FILE="$_GW_DIR/adapters/ia/${PROVIDER}.sh"
-
-if [ ! -f "$ADAPTER_FILE" ]; then
-  if command -v ui_error >/dev/null 2>&1; then
-    ui_error "Adapter for provider '$PROVIDER' not found at $ADAPTER_FILE" >&2
-    ui_info "Supported providers: cursor, copilot" >&2
-  fi
-  exit 1
-fi
-
-source "$ADAPTER_FILE"
+_LOADED_PROVIDER=""
 
 # generative_ia PROMPT [VERBOSE]
-# Public entry point. Dispatches to the active provider adapter.
+# Public entry point. Resolves AI_PROVIDER at call time and dispatches to the
+# matching adapter. The adapter is sourced only when the provider changes,
+# avoiding redundant file reads across multiple calls in the same session.
 generative_ia() {
-  case "$PROVIDER" in
-    cursor)
-      _generative_ia_cursor "$@"
-      ;;
-    copilot)
-      _generative_ia_copilot "$@"
-      ;;
+  local _PROVIDER="${AI_PROVIDER:-copilot}"
+  local _ADAPTER_FILE="$_GW_DIR/adapters/ia/${_PROVIDER}.sh"
+
+  if [ "$_PROVIDER" != "$_LOADED_PROVIDER" ]; then
+    if [ ! -f "$_ADAPTER_FILE" ]; then
+      ui_error "Adapter for provider '${_PROVIDER}' not found at ${_ADAPTER_FILE}" >&2
+      ui_info "Supported providers: cursor, copilot" >&2
+      return 1
+    fi
+    source "$_ADAPTER_FILE"
+    _LOADED_PROVIDER="$_PROVIDER"
+  fi
+
+  case "$_PROVIDER" in
+    cursor)  _generative_ia_cursor  "$@" ;;
+    copilot) _generative_ia_copilot "$@" ;;
     *)
-      ui_error "Unknown AI_PROVIDER '$PROVIDER'. Supported: cursor, copilot" >&2
+      ui_error "Unknown AI_PROVIDER '${_PROVIDER}'. Supported: cursor, copilot" >&2
       return 1
       ;;
   esac
@@ -76,10 +63,8 @@ generative_ia() {
 
 if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
   if [ $# -eq 0 ]; then
-    if command -v ui_error >/dev/null 2>&1; then
-      ui_error "Usage: $0 \"prompt\" [verbose]" >&2
-      ui_info "   or: source $0 && generative_ia \"prompt\" [1]" >&2
-    fi
+    ui_error "Usage: $0 \"prompt\" [verbose]" >&2
+    ui_info "   or: source $0 && generative_ia \"prompt\" [1]" >&2
     exit 1
   fi
   generative_ia "$1" "${2:-0}"
