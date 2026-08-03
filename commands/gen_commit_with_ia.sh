@@ -6,8 +6,8 @@
 # After committing, syncs the commit body to the open PR description if one
 # exists for the current branch.
 #
-# Dependencies: git (staged changes required)
-# Config:       commands/config.env  (PROMPT_COMMIT_TEMPLATE)
+# Dependencies: git (staged changes required), yq
+# Config:       config.yaml  (prompts.commit)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
@@ -16,6 +16,8 @@ source "$SCRIPT_DIR/gateways/adapters/scm/gateway.sh"
 
 clear
 ui_header "📝  AI Commit Message"
+
+config_select_provider || { ui_cancel; exit 0; }
 
 FILES=$(git diff --cached --name-only | head -n 15 | tr '\n' ', ')
 if [ -z "$FILES" ]; then

@@ -4,8 +4,8 @@
 # Generates a conventional branch name from staged changes using the
 # configured AI provider. Presents the result for review before creating.
 #
-# Dependencies: git (staged changes required)
-# Config:       commands/config.env  (PROMPT_BRANCH_TEMPLATE)
+# Dependencies: git (staged changes required), yq
+# Config:       config.yaml  (prompts.branch)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
@@ -13,6 +13,8 @@ source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
 clear
 ui_header "🌿  AI Branch Name"
+
+config_select_provider || { ui_cancel; exit 0; }
 
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
 if [ -z "$FILES_CHANGED" ]; then

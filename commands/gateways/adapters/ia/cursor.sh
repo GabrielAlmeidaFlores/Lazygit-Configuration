@@ -1,7 +1,7 @@
 #!/bin/bash
 # cursor.sh — Cursor Agent CLI adapter for generative_ia
 #
-# Configuration (via config.env):
+# Configuration (via config.yaml → loaded by lib/config.sh):
 #   MODEL        — Primary model    (empty = Cursor default)
 #   FALLBACK_MODEL — Fallback model (empty = no fallback)
 #   MAX_RETRIES  — Retry attempts per model  (default: 2)

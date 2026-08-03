@@ -5,7 +5,7 @@
 # using the Azure DevOps REST API via curl.
 #
 # Authentication priority:
-#   1. AZURE_DEVOPS_PAT in config.env  (Personal Access Token)
+#   1. AZURE_DEVOPS_PAT in config.yaml (Personal Access Token)
 #   2. az account get-access-token     (if az CLI is installed and logged in)
 #   3. Returns 1 with a clear error message.
 #
@@ -94,7 +94,7 @@ _scm_azure_resolve_auth() {
   fi
 
   ui_stacktrace "Azure DevOps — not authenticated" \
-    "Set AZURE_DEVOPS_PAT in config.env or run 'az login'." \
+    "Set AZURE_DEVOPS_PAT in config.yaml or run 'az login'." \
     "Required PAT scopes: Code (Read), Pull Request Threads (Read & Write)."
   return 1
 }

@@ -2,12 +2,12 @@
 # review_pr.sh — Interactive AI-powered PR review for Lazygit
 #
 # Lists open PRs, runs focused AI analyses, and posts natural code review
-# comments on the pull request. All AI prompts are configured in config.env.
+# comments on the pull request. All AI prompts are configured in config.yaml.
 # Supports GitHub and Azure DevOps — provider is detected automatically from
 # the git remote URL.
 #
-# Dependencies: fzf, jq, curl  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
-# Config:       commands/config.env
+# Dependencies: fzf, jq, curl, yq  (gh for GitHub; az or AZURE_DEVOPS_PAT for Azure)
+# Config:       config.yaml
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -19,7 +19,7 @@ source "$SCRIPT_DIR/gateways/adapters/scm/gateway.sh"
 
 clear
 
-for dep in fzf jq curl; do
+for dep in fzf jq curl yq; do
   if ! command -v "$dep" &>/dev/null; then
     ui_error "'$dep' not found. Please install it before continuing."
     exit 1
@@ -64,7 +64,8 @@ SELECTED_PR=$(ui_print "$PR_LIST" | fzf \
 PR_NUMBER=$(ui_print "$SELECTED_PR" | grep -oE '^#[0-9]+' | tr -d '#')
 PR_TITLE=$(ui_print "$SELECTED_PR" | sed -E 's/^#[0-9]+  //' | sed 's/  \[.*//')
 
-CURRENT_PROVIDER="${AI_PROVIDER:-copilot}"
+config_select_provider || { ui_cancel; exit 0; }
+CURRENT_PROVIDER="$AI_PROVIDER"
 
 DEFAULT_CURSOR_MODELS="default
 gpt-4o-mini  (low — fast and economical)
@@ -385,7 +386,7 @@ _get_analysis_icon() {
 
 # get_instructions ANALYSIS_NAME
 # Returns the instruction text for a given analysis type, sourced from
-# config.env variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
+# config.yaml variables (PROMPT_INSTRUCTIONS_*) with hardcoded fallbacks.
 get_instructions() {
   case "$1" in
     "Architecture")       ui_print "${PROMPT_INSTRUCTIONS_ARCHITECTURE:-Check for architectural issues: separation of concerns, coupling, SOLID violations.}" ;;
