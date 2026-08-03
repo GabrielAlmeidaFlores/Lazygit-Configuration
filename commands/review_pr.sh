@@ -443,7 +443,7 @@ run_analysis() {
   }
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3" >&2
+  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 1 of 3"
   local P1_PROMPT
   P1_PROMPT=$(render_template "$PROMPT_ANALYSIS_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -456,6 +456,7 @@ run_analysis() {
 
   _ai_call "$P1_PROMPT"
   local P1_EC=$?
+  ui_spinner_stop
   [ $P1_EC -eq 130 ] && return 130
   [ $P1_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P1_STATUS="$_AI_STATUS" P1_ISSUES="$_AI_ISSUES"
@@ -464,7 +465,7 @@ run_analysis() {
 ${P1_ISSUES}"
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3" >&2
+  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 2 of 3"
   local P2_PROMPT
   P2_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS2_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -478,6 +479,7 @@ ${P1_ISSUES}"
 
   _ai_call "$P2_PROMPT"
   local P2_EC=$?
+  ui_spinner_stop
   [ $P2_EC -eq 130 ] && return 130
   [ $P2_EC -ne 0 ]   && ui_print "ERROR" > "$RESULTS_DIR/${ANALYSIS_KEY}.status" && return 1
   local P2_ISSUES="$_AI_ISSUES"
@@ -488,7 +490,7 @@ $P2_ISSUES" \
     | grep -v "^$" | sort -u | sed 's/^/ISSUE: /')
 
   ICON=$(_get_analysis_icon "$ANALYSIS_NAME")
-  ui_step "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3" >&2
+  ui_spinner_start "${ICON}  ${ANALYSIS_NAME}  ·  pass 3 of 3"
   local P3_PROMPT
   P3_PROMPT=$(render_template "$PROMPT_ANALYSIS_PASS3_TEMPLATE" \
     "__ANALYSIS_NAME__"      "$ANALYSIS_NAME" \
@@ -502,6 +504,7 @@ $P2_ISSUES" \
 
   _ai_call "$P3_PROMPT"
   local P3_EC=$?
+  ui_spinner_stop
   [ $P3_EC -eq 130 ] && return 130
 
   local FINAL_STATUS FINAL_ISSUES
@@ -524,38 +527,22 @@ $P2_ISSUES" \
   fi
 }
 
-ANALYSIS_PIDS=()
-ANALYSIS_EXIT_CODES=()
-
 TOTAL_ANALYSES=$(ui_print "$ANALYSES_RAW" | grep -v "^$" | wc -l | tr -d ' ')
-ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses in parallel..."
+ui_step "🛠️  Running ${TOTAL_ANALYSES} analyses..."
 
-ANALYSIS_INDEX=0
 while IFS= read -r ANALYSIS; do
   [ -z "$ANALYSIS" ] && continue
   ANALYSES_ORDER+=("$ANALYSIS")
   INSTRUCTIONS=$(get_instructions "$ANALYSIS")
 
-  (
-    run_analysis "$ANALYSIS" "$INSTRUCTIONS"
-    exit $?
-  ) &
+  run_analysis "$ANALYSIS" "$INSTRUCTIONS"
+  ANALYSIS_EC=$?
 
-  ANALYSIS_PIDS[$ANALYSIS_INDEX]=$!
-  ANALYSIS_INDEX=$((ANALYSIS_INDEX + 1))
-done <<< "$ANALYSES_RAW"
-
-for i in "${!ANALYSIS_PIDS[@]}"; do
-  wait "${ANALYSIS_PIDS[$i]}"
-  ANALYSIS_EXIT_CODES[$i]=$?
-done
-
-for EXIT_CODE in "${ANALYSIS_EXIT_CODES[@]}"; do
-  if [ $EXIT_CODE -eq 130 ]; then
+  if [ $ANALYSIS_EC -eq 130 ]; then
     ui_cancel
     exit 0
   fi
-done
+done <<< "$ANALYSES_RAW"
 
 for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
