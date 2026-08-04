@@ -19,7 +19,8 @@ setup() {
   run _generative_ia_codex "review this diff"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"exec --sandbox read-only --model gpt-5.6-sol review this diff"* ]]
+  [[ "$output" == *"exec --sandbox read-only --model gpt-5.6-sol -"* ]]
+  [[ "$output" != *"review this diff"* ]]
   [[ "$output" != *"--ask-for-approval"* ]]
 }
 
@@ -29,7 +30,8 @@ setup() {
   run _generative_ia_codex "review this diff"
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"exec --sandbox read-only review this diff"* ]]
+  [[ "$output" == *"exec --sandbox read-only -"* ]]
+  [[ "$output" != *"review this diff"* ]]
   [[ "$output" != *"--model"* ]]
 }
 
