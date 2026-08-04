@@ -48,9 +48,8 @@ providers:
 # ─── Azure DevOps ─────────────────────────────────────────────────────────────
 
 azure_devops:
-  # Personal Access Token with Code (Read) and Pull Request Threads (Read & Write) scopes.
-  # Required for Azure DevOps remotes (dev.azure.com, visualstudio.com).
-  # Leave empty to use 'az account get-access-token' if az CLI is installed and logged in.
+  # Keep empty to avoid storing credentials in this tracked file.
+  # Use AZURE_DEVOPS_PAT or 'az login' for Azure DevOps remotes.
   pat: ""
 
 # ─── Prompts ──────────────────────────────────────────────────────────────────

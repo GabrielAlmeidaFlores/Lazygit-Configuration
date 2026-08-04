@@ -219,14 +219,11 @@ The PR review tool detects the source control provider automatically from the gi
 
 **GitHub authentication** is resolved automatically (PAT in remote URL, local `github.user` config, or active `gh` account).
 
-**Azure DevOps authentication** — configure `azure_devops.pat` in `settings.yaml` or use the Azure CLI:
+**Azure DevOps authentication** — keep `azure_devops.pat` empty in `settings.yaml`. Authenticate with the Azure CLI or set `AZURE_DEVOPS_PAT` in your shell profile:
 
-```yaml
-azure_devops:
-  # Required scopes: Code (Read), Pull Request Threads (Read & Write)
-  pat: "your-pat-here"
-
-# Leave pat empty to use az login instead.
+```bash
+export AZURE_DEVOPS_PAT="your-pat-here"
+# Required scopes: Code (Read), Pull Request Threads (Read & Write)
 ```
 
 ### AI Provider & Model
@@ -240,17 +237,17 @@ ai:
   timeout: 60
 ```
 
-| Variable | Applies to | Description |
+| YAML setting | Applies to | Description |
 |---|---|---|
-| `AI_PROVIDER` | All | Active provider: `copilot`, `cursor`, or `codex` |
-| `MODEL` | All | Primary model (empty = provider default) |
-| `FALLBACK_MODEL` | All | Fallback if primary fails |
-| `MAX_RETRIES` | All | Retry attempts per model |
-| `TIMEOUT` | All | Request timeout in seconds |
-| `CURSOR_BIN` | Cursor | Path to `agent` binary (empty = auto-detect) |
-| `CURSOR_MODE` | Cursor | Agent mode: `ask` or `plan` |
-| `COPILOT_BIN` | Copilot | Path to `copilot` binary (empty = auto-detect) |
-| `CODEX_BIN` | Codex | Path to `codex` binary (empty = auto-detect) |
+| `ai.provider` | All | Active provider: `copilot`, `cursor`, or `codex` |
+| `ai.model` | All | Primary model (empty = provider default) |
+| `ai.fallback_model` | All | Fallback if primary fails |
+| `ai.max_retries` | All | Retry attempts per model |
+| `ai.timeout` | All | Request timeout in seconds |
+| `providers.cursor.bin` | Cursor | Path to `agent` binary (empty = auto-detect) |
+| `providers.cursor.mode` | Cursor | Agent mode: `ask` or `plan` |
+| `providers.copilot.bin` | Copilot | Path to `copilot` binary (empty = auto-detect) |
+| `providers.codex.bin` | Codex | Path to `codex` binary (empty = auto-detect) |
 
 ### Model Selection
 
@@ -401,7 +398,7 @@ gui:
 
 ### Azure DevOps: authentication not configured
 
-Set `azure_devops.pat` in `settings.yaml` or run `az login` with the Azure CLI:
+Set `AZURE_DEVOPS_PAT` in your shell profile or run `az login` with the Azure CLI:
 
 ```bash
 # Install Azure CLI (macOS)

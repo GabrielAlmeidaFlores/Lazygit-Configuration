@@ -12,7 +12,7 @@
 # Calls Codex in non-interactive, read-only mode and prints the response to stdout.
 # Exit codes: 0 = success, 1 = failure, 130 = cancelled by user.
 
-CODEX_BIN="${CODEX_BIN:-$(which codex)}"
+CODEX_BIN="${CODEX_BIN:-$(command -v codex 2>/dev/null || true)}"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_helpers.sh"
 
@@ -29,12 +29,20 @@ _generative_ia_codex() {
     return 1
   fi
 
+  if [ -z "$CODEX_BIN" ]; then
+    ui_error "Codex binary not found in PATH" >&2
+    return 1
+  fi
+
   if [ ! -x "$CODEX_BIN" ]; then
     ui_error "Codex binary not found or not executable at $CODEX_BIN" >&2
     return 1
   fi
 
-  _TEMP_OUT=$(mktemp)
+  if ! _TEMP_OUT=$(mktemp); then
+    ui_error "Could not create temporary file for Codex response" >&2
+    return 1
+  fi
 
   _ai_cancel() {
     _CANCELLED=1

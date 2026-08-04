@@ -41,3 +41,23 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Codex binary not found"* ]]
 }
+
+@test "_generative_ia_codex: identifies a missing PATH binary" {
+  CODEX_BIN=""
+
+  run _generative_ia_codex "review this diff"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Codex binary not found in PATH"* ]]
+}
+
+@test "_generative_ia_codex: reports temporary-file creation failures" {
+  mktemp() {
+    return 1
+  }
+
+  run _generative_ia_codex "review this diff"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Could not create temporary file"* ]]
+}
