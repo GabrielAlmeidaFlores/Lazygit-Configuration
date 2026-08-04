@@ -74,15 +74,28 @@ claude-sonnet-4.6  (medium-high — latest sonnet)
 gpt-5.3-codex  (high — advanced coding)
 claude-opus-4.6  (high — premium quality)"
 
-if [ "$CURRENT_PROVIDER" = "cursor" ]; then
-  MODEL_LIST="${CURSOR_MODELS:+default
+DEFAULT_CODEX_MODELS="default
+gpt-5.6-terra  (medium — balanced coding)
+gpt-5.6-luna  (low — fast and economical)
+gpt-5.5  (high — complex coding and research)"
+
+case "$CURRENT_PROVIDER" in
+  cursor)
+    MODEL_LIST="${CURSOR_MODELS:+default
 $(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
-  MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
-else
-  MODEL_LIST="${COPILOT_MODELS:+default
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
+    ;;
+  copilot)
+    MODEL_LIST="${COPILOT_MODELS:+default
 $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
-  MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
-fi
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
+    ;;
+  codex)
+    MODEL_LIST="${CODEX_MODELS:+default
+$(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_CODEX_MODELS}"
+    ;;
+esac
 
 SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Analysis model ($CURRENT_PROVIDER)  " \
@@ -517,7 +530,7 @@ $P2_ISSUES" \
     ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.issues"
   fi
 
-  if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ "$FINAL_STATUS" = "OK" ]; then
+  if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ "$FINAL_STATUS" = "ISSUES_FOUND" ]; then
     ui_print "$FINAL_ISSUES" > "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments"
   fi
 }
@@ -543,6 +556,7 @@ done <<< "$ANALYSES_RAW"
 
 for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
   ANALYSIS_KEY="${ANALYSIS_NAME// /_}"
+  [ "$ANALYSIS_NAME" = "Fix Validation" ] && continue
   ISSUES_FILE="$RESULTS_DIR/${ANALYSIS_KEY}.issues"
   if [ -f "$ISSUES_FILE" ]; then
     while IFS= read -r ISSUE_LINE; do
@@ -574,9 +588,16 @@ for ANALYSIS_NAME in "${ANALYSES_ORDER[@]}"; do
       fi
       ;;
     ISSUES_FOUND)
-      COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || ui_print_raw '0')
-      COUNT=$(ui_print_raw "$COUNT" | tr -d '\n\r ')
-      ui_table_row "$LABEL" "${COUNT} issue(s) found" "warn" ;;
+      if [ "$ANALYSIS_NAME" = "Fix Validation" ] && [ -f "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" ]; then
+        RESOLVED_COUNT=$(grep -c "FIXED" "$RESULTS_DIR/${ANALYSIS_KEY}.resolved_comments" 2>/dev/null || ui_print_raw '0')
+        RESOLVED_COUNT=$(ui_print_raw "$RESOLVED_COUNT" | tr -d '\n\r ')
+        ui_table_row "$LABEL" "${RESOLVED_COUNT} fix(es) validated" "ok"
+      else
+        COUNT=$(grep -c . "$RESULTS_DIR/${ANALYSIS_KEY}.issues" 2>/dev/null || ui_print_raw '0')
+        COUNT=$(ui_print_raw "$COUNT" | tr -d '\n\r ')
+        ui_table_row "$LABEL" "${COUNT} issue(s) found" "warn"
+      fi
+      ;;
     *)  ui_table_row "$LABEL" "analysis failed" "error" ;;
   esac
 done
@@ -596,7 +617,7 @@ if [ -f "$RESULTS_DIR/Fix_Validation.resolved_comments" ]; then
         if [ -n "$COMMENT_TEXT" ] && [ -n "$PR_COMMENTS_WITH_IDS" ]; then
           while IFS='|' read -r COMMENT_ID COMMENT_FULL; do
             if [ -n "$COMMENT_ID" ] && ui_print "$COMMENT_FULL" | grep -qF "$COMMENT_TEXT"; then
-              if scm_pr_comment_reply "$COMMENT_ID" "Fixed and validated by AI analysis" 2>/dev/null; then
+              if scm_pr_resolve_comment "$PR_NUMBER" "$COMMENT_ID" 2>/dev/null; then
                 RESOLVED_COUNT=$((RESOLVED_COUNT + 1))
               fi
               break

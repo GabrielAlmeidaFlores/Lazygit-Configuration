@@ -273,17 +273,51 @@ _scm_azure_pr_get_comments() {
   fi
   rm -f "$ERR_FILE"
 
-  SCM_INLINE_COMMENTS_RAW="[]"
+  SCM_INLINE_COMMENTS_RAW=$(ui_print "$RAW" | jq '[
+    .value[]
+    | .id as $thread_id
+    | .threadContext as $thread_context
+    | .comments[]
+    | select(.commentType == 1)
+    | {
+        id: .id,
+        threadId: $thread_id,
+        user: {login: .author.displayName},
+        path: ($thread_context.filePath // ""),
+        line: ($thread_context.rightFileEnd.line // null),
+        body: .content
+      }
+  ]' 2>/dev/null || ui_print "[]")
   SCM_REVIEW_COMMENTS=$(ui_print "$RAW" | jq -r \
     '.value[].comments[] | select(.commentType == 1) | "[\(.author.displayName)] \(.content)"' \
     2>/dev/null || ui_print "")
 }
 
-# _scm_azure_pr_comment_reply COMMENT_ID BODY
-# Azure DevOps does not support direct replies by comment ID.
-# Falls back to posting a new general thread comment on the PR.
-_scm_azure_pr_comment_reply() {
-  _scm_azure_pr_comment "$1" "$2"
+# _scm_azure_pr_resolve_comment PR_ID COMMENT_ID
+# Marks the thread containing COMMENT_ID as fixed without removing the comment.
+# Exit codes: 0 = fixed or already fixed, 1 = thread not found or API failure.
+_scm_azure_pr_resolve_comment() {
+  local PR_ID="$1" COMMENT_ID="$2" RAW THREAD_STATE THREAD_ID THREAD_STATUS RESULT
+
+  [[ "$PR_ID" =~ ^[0-9]+$ ]] || return 1
+  [[ "$COMMENT_ID" =~ ^[0-9]+$ ]] || return 1
+
+  RAW=$(_az_curl GET "${_AZ_API_BASE}/pullrequests/$PR_ID/threads?api-version=7.1" 2>/dev/null) || return 1
+  THREAD_STATE=$(ui_print "$RAW" | jq -r --argjson comment_id "$COMMENT_ID" '
+    .value[]?
+    | select(any(.comments[]?; .id == $comment_id))
+    | "\(.id)|\(.status)"
+  ' | head -n 1)
+
+  [ -z "$THREAD_STATE" ] && return 1
+  THREAD_ID="${THREAD_STATE%%|*}"
+  THREAD_STATUS="${THREAD_STATE##*|}"
+  [ "$THREAD_STATUS" = "2" ] && return 0
+
+  RESULT=$(_az_curl PATCH \
+    "${_AZ_API_BASE}/pullrequests/$PR_ID/threads/$THREAD_ID?api-version=7.1" \
+    '{"status":2}' 2>/dev/null) || return 1
+  ui_print "$RESULT" | jq -e '.status == 2' >/dev/null 2>&1
 }
 
 # _scm_azure_pr_comment PR_ID BODY

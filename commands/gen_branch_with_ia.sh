@@ -11,6 +11,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/ui.sh"
 source "$SCRIPT_DIR/gateways/generative-ia.sh"
 
+# _cleanup_ui
+# Stops any active UI spinner before the script exits.
+# Exit codes: always 0.
+_cleanup_ui() {
+  ui_spinner_stop
+}
+
+# _cancel
+# Cleans up the UI and exits after an interruption.
+# Exit codes: 130 = cancelled by user.
+_cancel() {
+  ui_spinner_stop
+  ui_cancel
+  exit 130
+}
+
+trap '_cleanup_ui' EXIT
+trap '_cancel' INT TERM
+
 clear
 ui_header "🌿  AI Branch Name"
 

@@ -50,6 +50,18 @@ teardown() {
   [ "$AI_PROVIDER" = "copilot" ]
 }
 
+@test "config_select_provider: sets AI_PROVIDER to codex when codex selected" {
+  MOCK_FZF_OUTPUT="codex"
+  config_select_provider
+  [ "$AI_PROVIDER" = "codex" ]
+}
+
+@test "config_select_provider: persists codex as the last provider" {
+  MOCK_FZF_OUTPUT="codex"
+  config_select_provider
+  [ "$(yq '.last_provider' "$_CONFIG_STATE")" = "codex" ]
+}
+
 @test "config_select_provider: returns 1 when user cancels" {
   MOCK_FZF_OUTPUT=""
   run config_select_provider

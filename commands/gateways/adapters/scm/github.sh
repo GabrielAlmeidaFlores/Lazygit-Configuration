@@ -88,13 +88,64 @@ _scm_github_pr_get_comments() {
     --jq '.comments[] | "[\(.author.login)] \(.body)"' 2>/dev/null || ui_print "")
 }
 
-# _scm_github_pr_comment_reply COMMENT_ID BODY
-# Posts a reply to an existing inline review comment.
-_scm_github_pr_comment_reply() {
-  _gh api "repos/{owner}/{repo}/pulls/comments/$1/replies" \
-    --method POST \
-    --field body="$2" \
-    >/dev/null 2>&1
+# _scm_github_pr_resolve_comment PR_ID COMMENT_ID
+# Resolves the review thread containing COMMENT_ID without removing the comment.
+# Exit codes: 0 = resolved or already resolved, 1 = thread not found or API failure.
+_scm_github_pr_resolve_comment() {
+  local PR_ID="$1" COMMENT_ID="$2" REPO_SLUG OWNER REPO THREADS THREAD_STATE THREAD_ID IS_RESOLVED
+
+  [[ "$PR_ID" =~ ^[0-9]+$ ]] || return 1
+  [[ "$COMMENT_ID" =~ ^[0-9]+$ ]] || return 1
+
+  REPO_SLUG=$(_gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null) || return 1
+  OWNER="${REPO_SLUG%%/*}"
+  REPO="${REPO_SLUG#*/}"
+  [ -n "$OWNER" ] && [ -n "$REPO" ] && [ "$OWNER" != "$REPO" ] || return 1
+
+  THREADS=$(_gh api graphql \
+    -f query='query($owner: String!, $repo: String!, $pr: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $pr) {
+          reviewThreads(first: 100) {
+            nodes {
+              id
+              isResolved
+              comments(first: 100) {
+                nodes {
+                  databaseId
+                }
+              }
+            }
+          }
+        }
+      }
+    }' \
+    -f owner="$OWNER" \
+    -f repo="$REPO" \
+    -F pr="$PR_ID" 2>/dev/null) || return 1
+
+  THREAD_STATE=$(ui_print "$THREADS" | jq -r --argjson comment_id "$COMMENT_ID" '
+    .data.repository.pullRequest.reviewThreads.nodes[]?
+    | select(any(.comments.nodes[]?; .databaseId == $comment_id))
+    | "\(.id)|\(.isResolved)"
+  ' | head -n 1)
+
+  [ -z "$THREAD_STATE" ] && return 1
+  THREAD_ID="${THREAD_STATE%%|*}"
+  IS_RESOLVED="${THREAD_STATE##*|}"
+  [ "$IS_RESOLVED" = "true" ] && return 0
+
+  _gh api graphql \
+    -f query='mutation($threadId: ID!) {
+      resolveReviewThread(input: {threadId: $threadId}) {
+        thread {
+          isResolved
+        }
+      }
+    }' \
+    -f threadId="$THREAD_ID" \
+    --jq '.data.resolveReviewThread.thread.isResolved' \
+    2>/dev/null | grep -qx 'true'
 }
 # Posts a general comment. Prints "general" on success, returns 1 on failure.
 _scm_github_pr_comment() {

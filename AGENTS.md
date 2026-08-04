@@ -121,9 +121,11 @@ commands/
 ├── gateways/
 │   ├── generative-ia.sh         # AI gateway (routes to providers)
 │   └── adapters/
-│       ├── copilot.sh           # GitHub Copilot adapter
-│       ├── cursor.sh            # Cursor Agent adapter
-│       └── _helpers.sh          # Shared adapter utilities
+│       └── ia/
+│           ├── copilot.sh       # GitHub Copilot adapter
+│           ├── cursor.sh        # Cursor Agent adapter
+│           ├── codex.sh         # OpenAI Codex adapter
+│           └── _helpers.sh      # Shared adapter utilities
 ├── review_pr.sh                 # PR review with sequential analysis
 ├── gen_commit_with_ia.sh        # AI commit message generator
 └── gen_branch_with_ia.sh        # AI branch name generator
@@ -141,7 +143,7 @@ state.yml                        # Auto-generated (gitignored)
 
 ```
 User Script → config_select_provider() → AI_PROVIDER set interactively
-           → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor)
+            → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor / _generative_ia_codex)
 ```
 
 #### Configuration (`settings.yaml` → `lib/config.sh`)
@@ -153,13 +155,15 @@ MAX_RETRIES=2
 TIMEOUT=60
 ```
 
+Codex calls must use `codex exec --sandbox read-only`.
+
 #### Adding New Providers
 
 1. Create `gateways/adapters/ia/provider.sh`
 2. Implement `_generative_ia_provider()` function
 3. Add case in `gateways/generative-ia.sh`
 4. Add provider to `config_select_provider` list in `lib/config.sh`
-5. Source UI functions: `source "$(dirname)/../../lib/ui.sh"`
+5. Source UI functions: `source "$(dirname "${BASH_SOURCE[0]}")/../../lib/ui.sh"`
 
 ---
 

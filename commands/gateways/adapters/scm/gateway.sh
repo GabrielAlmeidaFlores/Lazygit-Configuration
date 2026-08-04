@@ -116,11 +116,12 @@ scm_pr_get_comments() {
   esac
 }
 
-# scm_pr_comment_reply COMMENT_ID BODY
-# Posts a reply to an existing inline comment. Falls back to general comment.
-scm_pr_comment_reply() {
+# scm_pr_resolve_comment PR_ID COMMENT_ID
+# Resolves the review thread containing COMMENT_ID when supported by the SCM.
+# Exit codes: 0 = resolved, 1 = thread not found or API failure.
+scm_pr_resolve_comment() {
   case "$SCM_PROVIDER" in
-    github)       _scm_github_pr_comment_reply "$@" ;;
-    azure-devops) _scm_azure_pr_comment_reply  "$@" ;;
+    github)       _scm_github_pr_resolve_comment "$@" ;;
+    azure-devops) _scm_azure_pr_resolve_comment "$@" ;;
   esac
 }
