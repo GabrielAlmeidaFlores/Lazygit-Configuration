@@ -1,36 +1,36 @@
+<div align="center">
+
 # LazyGit Enhanced Configuration
 
-A powerful LazyGit configuration with automated workflows, AI-powered code review, and beautiful theme integration.
+### Deliberate Git workflows, with AI where it earns its place.
 
-## Features
+Turn staged changes into polished commits and branch names. Review pull requests through focused, three-pass analysis. Keep every suggestion under human control.
 
-### Automation & Intelligence
+[Quick Start](#quick-start) · [Install](#installation) · [PR Review](#ai-pr-review-ctrla-or-pr-review) · [Configuration](#configuration)
 
-- **AI PR Review** — Three-pass analysis for architecture, security, code quality, test coverage and performance. Posts inline comments directly on GitHub at the exact line of code.
-- **AI-Powered Commit Messages** — Generate professional, conventional commit messages from staged changes.
-- **AI-Powered Branch Names** — Generate descriptive, kebab-case branch names from staged changes.
-- **Multi-Provider AI** — Switch between Cursor Agent, GitHub Copilot, and OpenAI Codex via `settings.yaml`.
-- **Configurable AI Model** — Select the model interactively at runtime or set a default in `settings.yaml`.
+</div>
 
-### Code Review Quality
+> [!TIP]
+> Built for developers who want a fast terminal workflow without giving up review quality, clear history, or control over what gets posted.
 
-- **3-Pass Analysis** — Each analysis type runs three sequential AI passes: initial analysis, second pass informed by the first, and a final validation pass that filters false positives.
-- **Inline Comments** — PR comments are posted directly on the relevant line of code via the GitHub API, not as general PR comments.
-- **Per-repo Authentication** — Automatically uses the correct GitHub account based on local git config or embedded remote credentials.
+## A Better Git Loop
 
-### User Experience
+| Review with context | Commit with intent |
+|---|---|
+| Run focused checks for architecture, security, bugs, performance, tests, spelling, and resolved feedback. | Generate a conventional commit message from staged changes, then review or edit it before committing. |
+| Every PR analysis runs three passes to improve signal and filter false positives. | Generate a descriptive, kebab-case branch name from the same staged context. |
 
-- **Human-in-the-Loop** — Review and edit all suggestions before applying.
-- **Interactive Editing** — Integrated editor support (nano, vim, etc.).
-- **Optional Context Input** — Provide additional context to the AI for better results.
-- **Box-drawing UI** — Consistent terminal interface with borders, color coding, and structured output.
+| Choose your AI | Keep the final call |
+|---|---|
+| Use GitHub Copilot, Cursor Agent, or OpenAI Codex. Provider, model lists, prompts, retries, and timeouts live in `settings.yaml`. | Inspect every suggestion, edit it in your preferred editor, post comments selectively, and resolve validated review threads without deleting history. |
 
-### Customization
+## What It Includes
 
-- **Dracula Theme** — Complete color scheme integration.
-- **Modular Architecture** — Easy to extend and customize.
-- **Gateway Pattern** — Swap AI providers or add new integrations effortlessly.
-- **Config-driven Prompts** — All AI prompt templates live in `settings.yaml`. No script editing needed.
+- **Three-pass PR review**: architecture, security, code quality, test coverage, performance, bugs, spelling, and fix validation.
+- **Precise collaboration**: inline review comments target the relevant diff line; validated fixes resolve the existing review thread.
+- **Terminal-native interface**: structured panels, fuzzy pickers, optional context, and a Dracula-themed LazyGit setup.
+- **Provider gateway**: a modular adapter layer makes it straightforward to switch or extend AI providers.
+- **Per-repository authentication**: automatically selects the appropriate GitHub account from local configuration or the active `gh` session.
 
 ---
 
