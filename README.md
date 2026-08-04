@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/lazygit-enhanced.svg" alt="LazyGit Enhanced Configuration logo" width="128">
+
 # LazyGit Enhanced Configuration
 
 ### Deliberate Git workflows, with AI where it earns its place.

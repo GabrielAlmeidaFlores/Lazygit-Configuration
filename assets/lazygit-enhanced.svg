@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-labelledby="title description">
+  <title id="title">LazyGit Enhanced Configuration</title>
+  <desc id="description">A terminal prompt branching into a Git workflow</desc>
+  <defs>
+    <linearGradient id="surface" x1="32" y1="24" x2="208" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3b2d6f"/>
+      <stop offset="1" stop-color="#191622"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="216" height="216" rx="48" fill="url(#surface)"/>
+  <rect x="13" y="13" width="214" height="214" rx="47" fill="none" stroke="#bd93f9" stroke-opacity=".45" stroke-width="2"/>
+  <path d="M72 78l30 30-30 30" fill="none" stroke="#f8f8f2" stroke-linecap="round" stroke-linejoin="round" stroke-width="14"/>
+  <path d="M119 139h30c17 0 25 8 25 25v14" fill="none" stroke="#50fa7b" stroke-linecap="round" stroke-width="12"/>
+  <path d="M119 139h30c17 0 25-8 25-25v-14" fill="none" stroke="#8be9fd" stroke-linecap="round" stroke-width="12"/>
+  <circle cx="174" cy="96" r="13" fill="#8be9fd"/>
+  <circle cx="174" cy="190" r="13" fill="#50fa7b"/>
+  <rect x="75" y="164" width="45" height="12" rx="6" fill="#ffb86c"/>
+</svg>
