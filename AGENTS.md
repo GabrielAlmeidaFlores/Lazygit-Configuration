@@ -123,6 +123,7 @@ commands/
 │   └── adapters/
 │       ├── copilot.sh           # GitHub Copilot adapter
 │       ├── cursor.sh            # Cursor Agent adapter
+│       ├── codex.sh             # OpenAI Codex adapter
 │       └── _helpers.sh          # Shared adapter utilities
 ├── review_pr.sh                 # PR review with sequential analysis
 ├── gen_commit_with_ia.sh        # AI commit message generator
@@ -141,7 +142,7 @@ state.yml                        # Auto-generated (gitignored)
 
 ```
 User Script → config_select_provider() → AI_PROVIDER set interactively
-           → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor)
+            → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor / _generative_ia_codex)
 ```
 
 #### Configuration (`settings.yaml` → `lib/config.sh`)
@@ -152,6 +153,8 @@ FALLBACK_MODEL=""        # Fallback on failure
 MAX_RETRIES=2
 TIMEOUT=60
 ```
+
+Codex calls must use `codex exec --sandbox read-only`.
 
 #### Adding New Providers
 

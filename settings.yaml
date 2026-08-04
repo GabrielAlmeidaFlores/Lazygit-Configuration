@@ -8,7 +8,7 @@
 # ─── AI Gateway ───────────────────────────────────────────────────────────────
 
 ai:
-  # Default provider shown pre-selected in the runtime picker: cursor | copilot
+  # Default provider shown pre-selected in the runtime picker: cursor | copilot | codex
   provider: copilot
   # Primary model — leave empty for provider default
   model: ""
@@ -37,6 +37,13 @@ providers:
     # Comma-separated model list shown in the fzf model selector.
     # Leave empty to use the built-in defaults.
     models: "gemini-3.1-pro-preview (medium — fast and capable),claude-sonnet-4.5 (medium — balanced quality),claude-sonnet-4.6 (medium-high — latest sonnet),gpt-5.3-codex (high — advanced coding),claude-opus-4.6 (high — premium quality)"
+
+  codex:
+    # Path to OpenAI Codex CLI binary (empty = auto-detect from PATH)
+    bin: ""
+    # Comma-separated model list shown in the fzf model selector.
+    # Leave empty to use the built-in defaults.
+    models: "gpt-5.6-terra (medium — balanced coding),gpt-5.6-luna (low — fast and economical),gpt-5.5 (high — complex coding and research)"
 
 # ─── Azure DevOps ─────────────────────────────────────────────────────────────
 

@@ -40,6 +40,12 @@ _set_valid_vars() {
   [ "$status" -eq 0 ]
 }
 
+@test "_cfg_validate: passes with valid codex config" {
+  _set_valid_vars codex 2 60
+  run _cfg_validate
+  [ "$status" -eq 0 ]
+}
+
 @test "_cfg_validate: rejects unknown provider" {
   AI_PROVIDER="openai"
   run _cfg_validate

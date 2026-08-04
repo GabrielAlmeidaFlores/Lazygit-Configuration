@@ -8,8 +8,8 @@
 #
 # Globals exported after sourcing:
 #   AI_PROVIDER, MODEL, FALLBACK_MODEL, MAX_RETRIES, TIMEOUT
-#   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, AZURE_DEVOPS_PAT
-#   CURSOR_MODELS, COPILOT_MODELS
+#   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, CODEX_BIN, AZURE_DEVOPS_PAT
+#   CURSOR_MODELS, COPILOT_MODELS, CODEX_MODELS
 #   PROMPT_COMMIT_TEMPLATE, PROMPT_BRANCH_TEMPLATE
 #   PROMPT_ANALYSIS_TEMPLATE, PROMPT_ANALYSIS_PASS2_TEMPLATE
 #   PROMPT_ANALYSIS_PASS3_TEMPLATE, PROMPT_COMMENT_TEMPLATE
@@ -49,9 +49,9 @@ _cfg_validate() {
   local _ERRORS=0
 
   case "$AI_PROVIDER" in
-    cursor|copilot) ;;
+    cursor|copilot|codex) ;;
     *)
-      ui_error "settings.yaml: ai.provider must be 'cursor' or 'copilot' (got: '${AI_PROVIDER}')"
+      ui_error "settings.yaml: ai.provider must be 'cursor', 'copilot', or 'codex' (got: '${AI_PROVIDER}')"
       _ERRORS=$((_ERRORS + 1))
       ;;
   esac
@@ -101,9 +101,11 @@ if [ "${_CFG_SKIP_LOAD:-0}" != "1" ]; then
   CURSOR_BIN=$(_cfg_str '.providers.cursor.bin // ""'     "$_CONFIG_FILE")
   CURSOR_MODE=$(yq '.providers.cursor.mode // "ask"'      "$_CONFIG_FILE")
   COPILOT_BIN=$(_cfg_str '.providers.copilot.bin // ""'   "$_CONFIG_FILE")
+  CODEX_BIN=$(_cfg_str '.providers.codex.bin // ""'       "$_CONFIG_FILE")
   AZURE_DEVOPS_PAT=$(_cfg_str '.azure_devops.pat // ""'   "$_CONFIG_FILE")
   CURSOR_MODELS=$(yq '.providers.cursor.models // ""'     "$_CONFIG_FILE")
   COPILOT_MODELS=$(yq '.providers.copilot.models // ""'   "$_CONFIG_FILE")
+  CODEX_MODELS=$(_cfg_str '.providers.codex.models // ""' "$_CONFIG_FILE")
 
   PROMPT_COMMIT_TEMPLATE=$(yq '.prompts.commit'                            "$_CONFIG_FILE")
   PROMPT_BRANCH_TEMPLATE=$(yq '.prompts.branch'                            "$_CONFIG_FILE")
@@ -137,18 +139,24 @@ config_select_provider() {
     [ "$LAST_PROVIDER" = '""' ]   && LAST_PROVIDER=""
   fi
   [ -z "$LAST_PROVIDER" ] && LAST_PROVIDER="${AI_PROVIDER:-copilot}"
+  case "$LAST_PROVIDER" in
+    cursor|copilot|codex) ;;
+    *) LAST_PROVIDER="${AI_PROVIDER:-copilot}" ;;
+  esac
 
-  local OTHER_PROVIDER
-  [ "$LAST_PROVIDER" = "copilot" ] && OTHER_PROVIDER="cursor" || OTHER_PROVIDER="copilot"
-
-  local SELECTED
-  SELECTED=$(ui_print "${LAST_PROVIDER}
-${OTHER_PROVIDER}" | fzf \
+  local SELECTED PROVIDER
+  SELECTED=$({
+    ui_print "$LAST_PROVIDER"
+    for PROVIDER in cursor copilot codex; do
+      [ "$PROVIDER" != "$LAST_PROVIDER" ] && ui_print "$PROVIDER"
+    done
+  } | fzf \
     --prompt="  AI Provider  " \
     --header="Select AI provider — last used: ${LAST_PROVIDER}" \
     --height=15% \
     --border=rounded \
-    --margin=0,1,0,1)
+    --margin=0,1,0,1
+  )
 
   [ -z "$SELECTED" ] && return 1
 

@@ -74,15 +74,28 @@ claude-sonnet-4.6  (medium-high — latest sonnet)
 gpt-5.3-codex  (high — advanced coding)
 claude-opus-4.6  (high — premium quality)"
 
-if [ "$CURRENT_PROVIDER" = "cursor" ]; then
-  MODEL_LIST="${CURSOR_MODELS:+default
+DEFAULT_CODEX_MODELS="default
+gpt-5.6-terra  (medium — balanced coding)
+gpt-5.6-luna  (low — fast and economical)
+gpt-5.5  (high — complex coding and research)"
+
+case "$CURRENT_PROVIDER" in
+  cursor)
+    MODEL_LIST="${CURSOR_MODELS:+default
 $(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
-  MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
-else
-  MODEL_LIST="${COPILOT_MODELS:+default
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
+    ;;
+  copilot)
+    MODEL_LIST="${COPILOT_MODELS:+default
 $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
-  MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
-fi
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
+    ;;
+  codex)
+    MODEL_LIST="${CODEX_MODELS:+default
+$(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_CODEX_MODELS}"
+    ;;
+esac
 
 SELECTED_ANALYSIS_MODEL=$(ui_print "$MODEL_LIST" | fzf \
   --prompt="  Analysis model ($CURRENT_PROVIDER)  " \
