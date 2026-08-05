@@ -35,6 +35,19 @@ setup() {
   [[ "$output" != *"--model"* ]]
 }
 
+@test "_generative_ia_codex: sends the prompt through stdin" {
+  local MOCK_CODEX_BIN="$BATS_TEST_TMPDIR/codex-stdin"
+  ui_print '#!/bin/bash
+cat' > "$MOCK_CODEX_BIN"
+  chmod +x "$MOCK_CODEX_BIN"
+  CODEX_BIN="$MOCK_CODEX_BIN"
+
+  run _generative_ia_codex "prompt through stdin"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "prompt through stdin" ]
+}
+
 @test "_generative_ia_codex: rejects a missing binary" {
   CODEX_BIN="/missing/codex"
 
