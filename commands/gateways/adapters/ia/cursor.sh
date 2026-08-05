@@ -2,8 +2,7 @@
 # cursor.sh — Cursor Agent CLI adapter for generative_ia
 #
 # Configuration (via settings.yaml → loaded by lib/config.sh):
-#   MODEL        — Primary model    (empty = Cursor default)
-#   FALLBACK_MODEL — Fallback model (empty = no fallback)
+#   MODEL        — Primary model    (empty = configured Cursor default)
 #   MAX_RETRIES  — Retry attempts per model  (default: 2)
 #   TIMEOUT      — Request timeout in seconds  (default: 60)
 #   CURSOR_BIN   — Path to agent binary  (empty = auto-detect from PATH)
@@ -46,15 +45,8 @@ _generative_ia_cursor() {
   }
   trap '_ai_cancel' INT
 
-  local MODELS_TO_TRY=()
-  if [ -n "$MODEL" ]; then
-    MODELS_TO_TRY+=("$MODEL")
-  else
-    MODELS_TO_TRY+=("")
-  fi
-  if [ -n "$FALLBACK_MODEL" ] && [ "$FALLBACK_MODEL" != "$MODEL" ]; then
-    MODELS_TO_TRY+=("$FALLBACK_MODEL")
-  fi
+  _build_model_fallback_chain "${MODEL:-$CURSOR_DEFAULT_MODEL}" "$CURSOR_MODELS"
+  local MODELS_TO_TRY=("${MODEL_FALLBACK_CHAIN[@]}")
 
   for CURRENT_MODEL in "${MODELS_TO_TRY[@]}"; do
     [ $_CANCELLED -eq 1 ] && break
@@ -91,6 +83,8 @@ _generative_ia_cursor() {
 
       if [ $EXIT_CODE -eq 124 ]; then
         ui_warning "Call timed out  [$MODEL_LABEL]  attempt $ATTEMPT/$MAX_RETRIES" >&2
+      elif [ $EXIT_CODE -eq 0 ]; then
+        ui_warning "Call returned an empty response  [$MODEL_LABEL]  attempt $ATTEMPT/$MAX_RETRIES" >&2
       else
         ui_warning "Call failed  [$MODEL_LABEL]  exit $EXIT_CODE  attempt $ATTEMPT/$MAX_RETRIES" >&2
       fi

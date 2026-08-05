@@ -150,7 +150,6 @@ User Script → config_select_provider() → AI_PROVIDER set interactively
 ```bash
 AI_PROVIDER="copilot"    # set at runtime via fzf picker; persisted in config.state.yaml
 MODEL=""                 # Primary model
-FALLBACK_MODEL=""        # Fallback on failure
 MAX_RETRIES=2
 TIMEOUT=60
 ```

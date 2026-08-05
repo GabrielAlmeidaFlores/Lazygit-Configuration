@@ -7,7 +7,7 @@
 # Requires: yq (brew install yq)
 #
 # Globals exported after sourcing:
-#   AI_PROVIDER, MODEL, FALLBACK_MODEL, MAX_RETRIES, TIMEOUT
+#   AI_PROVIDER, MODEL, MAX_RETRIES, TIMEOUT
 #   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, CODEX_BIN, AZURE_DEVOPS_PAT
 #   CURSOR_MODELS, COPILOT_MODELS, CODEX_MODELS
 #   CURSOR_DEFAULT_MODEL, COPILOT_DEFAULT_MODEL, CODEX_DEFAULT_MODEL
@@ -98,7 +98,6 @@ if [ "${_CFG_SKIP_LOAD:-0}" != "1" ]; then
 
   AI_PROVIDER=$(yq '.ai.provider // "copilot"'            "$_CONFIG_FILE")
   MODEL=$(_cfg_str '.ai.model // ""'                      "$_CONFIG_FILE")
-  FALLBACK_MODEL=$(_cfg_str '.ai.fallback_model // ""'    "$_CONFIG_FILE")
   MAX_RETRIES=$(yq '.ai.max_retries // 2'                 "$_CONFIG_FILE")
   TIMEOUT=$(yq '.ai.timeout // 60'                        "$_CONFIG_FILE")
   CURSOR_BIN=$(_cfg_str '.providers.cursor.bin // ""'     "$_CONFIG_FILE")

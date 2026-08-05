@@ -12,7 +12,6 @@ FIXTURE_MIN_CONFIG='
 ai:
   provider: copilot
   model:
-  fallback_model:
   max_retries: 2
   timeout: 60
 providers:

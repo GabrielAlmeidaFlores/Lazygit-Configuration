@@ -36,3 +36,35 @@ _run_with_timeout() {
     return $EXIT_CODE
   fi
 }
+
+# _build_model_fallback_chain PRIMARY MODELS
+# Sets MODEL_FALLBACK_CHAIN to PRIMARY followed by the configured models listed below it.
+# MODELS is comma-separated.
+# Exit codes: always 0.
+_build_model_fallback_chain() {
+  local PRIMARY="$1" MODELS="$2" START_MODEL="$1" CANDIDATE QUEUED
+  MODEL_FALLBACK_CHAIN=()
+
+  if [ -n "$PRIMARY" ]; then
+    MODEL_FALLBACK_CHAIN+=("$PRIMARY")
+  else
+    MODEL_FALLBACK_CHAIN+=("")
+    return 0
+  fi
+
+  [ -n "$MODELS" ] || return 0
+
+  while IFS= read -r CANDIDATE; do
+    CANDIDATE=$(ui_print "$CANDIDATE" | sed 's/[[:space:]]*(.*//; s/[[:space:]]*$//')
+    if [ "$CANDIDATE" = "$START_MODEL" ]; then
+      START_MODEL=""
+      continue
+    fi
+    [ -z "$START_MODEL" ] || continue
+    [ -n "$CANDIDATE" ] || continue
+    for QUEUED in "${MODEL_FALLBACK_CHAIN[@]}"; do
+      [ "$QUEUED" = "$CANDIDATE" ] && continue 2
+    done
+    MODEL_FALLBACK_CHAIN+=("$CANDIDATE")
+  done < <(ui_print "$MODELS" | tr ',' '\n')
+}

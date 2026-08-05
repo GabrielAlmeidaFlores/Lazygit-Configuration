@@ -234,7 +234,6 @@ export AZURE_DEVOPS_PAT="your-pat-here"
 ai:
   provider: copilot # copilot | cursor | codex
   model: "" # Leave empty for provider default
-  fallback_model: "" # Fallback model if primary fails
   max_retries: 2
   timeout: 60
 ```
@@ -242,8 +241,7 @@ ai:
 | YAML setting | Applies to | Description |
 |---|---|---|
 | `ai.provider` | All | Active provider: `copilot`, `cursor`, or `codex` |
-| `ai.model` | All | Primary model (empty = provider default) |
-| `ai.fallback_model` | All | Fallback if primary fails |
+| `ai.model` | All | Initial model (empty = provider default); failures continue below it in the provider model list |
 | `ai.max_retries` | All | Retry attempts per model |
 | `ai.timeout` | All | Request timeout in seconds |
 | `providers.cursor.bin` | Cursor | Path to `agent` binary (empty = auto-detect) |

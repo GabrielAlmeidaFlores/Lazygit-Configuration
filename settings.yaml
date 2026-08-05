@@ -12,8 +12,6 @@ ai:
   provider: codex
   # Primary model — leave empty for provider default
   model: ""
-  # Fallback model if primary fails — leave empty for no fallback
-  fallback_model: ""
   # Number of retry attempts on failure (per model)
   max_retries: 2
   # Request timeout in seconds
