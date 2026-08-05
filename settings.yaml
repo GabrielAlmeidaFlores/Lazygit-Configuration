@@ -111,6 +111,7 @@ prompts:
     - Do not include any Co-authored-by lines.
     - Do not use emojis or special icons anywhere in the output.
     - Output ONLY the commit message.
+    - Never return only the title. The detailed overview and both sections are mandatory.
 
   # ─── Branch name ─────────────────────────────────────────────────────────────
 

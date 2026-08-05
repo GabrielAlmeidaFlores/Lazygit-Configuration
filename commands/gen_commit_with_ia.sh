@@ -79,9 +79,12 @@ while true; do
   case "$UI_ACTION" in
     proceed)
       if [ -n "$RAW_MSG" ]; then
-        git commit -F "$TEMP_MSG_FILE"
-        ui_success "Committed successfully."
-        COMMITTED=true
+        if git commit -F "$TEMP_MSG_FILE"; then
+          ui_success "Committed successfully."
+          COMMITTED=true
+        else
+          ui_error "Commit failed."
+        fi
       else
         ui_error "Message is empty. Commit aborted."
       fi
@@ -99,6 +102,13 @@ done
 
 rm -f "$TEMP_MSG_FILE"
 
+# _commit_body MESSAGE
+# Returns MESSAGE without its title and an optional blank line immediately after it.
+# Exit codes: always 0.
+_commit_body() {
+  ui_print "$1" | awk 'NR == 1 { next } !started && /^[[:space:]]*$/ { next } { started=1; print }'
+}
+
 # _sync_pr_description TITLE BODY
 # If an open PR exists for the current branch, updates its description with
 # the commit body. Detects the provider from the remote URL automatically.
@@ -111,9 +121,9 @@ _sync_pr_description() {
   case "$SCM_PROVIDER" in
     github)
       local PR_NUMBER
-      PR_NUMBER=$(GH_TOKEN="$_GH_PAT" gh pr view --json number -q '.number' 2>/dev/null)
+      PR_NUMBER=$(_gh pr view --json number -q '.number' 2>/dev/null)
       [ -z "$PR_NUMBER" ] && return 0
-      GH_TOKEN="$_GH_PAT" gh pr edit "$PR_NUMBER" --body "$BODY" >/dev/null 2>&1 \
+      _gh pr edit "$PR_NUMBER" --body "$BODY" >/dev/null 2>&1 \
         && ui_success "PR #${PR_NUMBER} description updated." \
         || ui_warning "Could not update PR description."
       ;;
@@ -134,6 +144,10 @@ _sync_pr_description() {
 
 if [ "$COMMITTED" = true ]; then
   COMMIT_TITLE=$(ui_print "$RAW_MSG" | head -1)
-  COMMIT_BODY=$(ui_print "$RAW_MSG" | tail -n +3)
-  _sync_pr_description "$COMMIT_TITLE" "$COMMIT_BODY"
+  COMMIT_BODY=$(_commit_body "$RAW_MSG")
+  if [ -n "$COMMIT_BODY" ]; then
+    _sync_pr_description "$COMMIT_TITLE" "$COMMIT_BODY"
+  else
+    ui_warning "Commit body is empty; PR description was not updated."
+  fi
 fi
