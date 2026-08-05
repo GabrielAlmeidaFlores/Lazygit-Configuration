@@ -9,7 +9,7 @@
 
 ai:
   # Default provider shown pre-selected in the runtime picker: cursor | copilot | codex
-  provider: copilot
+  provider: codex
   # Primary model — leave empty for provider default
   model: ""
   # Fallback model if primary fails — leave empty for no fallback

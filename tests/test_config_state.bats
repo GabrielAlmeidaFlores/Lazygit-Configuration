@@ -79,3 +79,14 @@ teardown() {
   config_select_provider
   grep -q "last_model" "$_CONFIG_STATE"
 }
+
+@test "config_select_model: sets the selected Codex model" {
+  AI_PROVIDER="codex"
+  CODEX_MODELS="gpt-5.6-terra (medium — balanced coding)"
+  MODEL=""
+  MOCK_FZF_OUTPUT="gpt-5.6-terra (medium — balanced coding)"
+
+  config_select_model
+
+  [ "$MODEL" = "gpt-5.6-terra" ]
+}

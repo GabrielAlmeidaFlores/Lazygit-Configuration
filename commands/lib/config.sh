@@ -20,6 +20,7 @@
 #
 # Functions defined after sourcing:
 #   config_select_provider
+#   config_select_model
 
 _CFG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CONFIG_DIR="${_CONFIG_DIR:-$(cd "${_CFG_LIB_DIR}/../.." && pwd)}"
@@ -168,4 +169,65 @@ config_select_provider() {
   else
     SELECTED="$SELECTED" yq -i '.last_provider = env(SELECTED)' "$_CONFIG_STATE"
   fi
+}
+
+# config_select_model [PROVIDER]
+# Shows an fzf picker for the selected provider's models and updates MODEL.
+# The default option retains the model configured in settings.yaml.
+# Returns 1 if the user cancels or the provider is unsupported.
+config_select_model() {
+  local PROVIDER="${1:-$AI_PROVIDER}" MODEL_LIST SELECTED
+  local DEFAULT_CURSOR_MODELS="default
+gpt-4o-mini  (low — fast and economical)
+gpt-4o  (medium — balanced)
+gpt-4.1  (medium — balanced)
+claude-4-5-sonnet  (medium — strong reasoning)
+gemini-2.5-pro  (medium — multimodal)
+claude-4-5  (medium-high — latest sonnet)
+claude-4-opus  (high — premium quality)
+o3  (high — deep reasoning)"
+  local DEFAULT_COPILOT_MODELS="default
+gemini-3.1-pro-preview  (medium — fast and capable)
+claude-sonnet-4.5  (medium — balanced quality)
+claude-sonnet-4.6  (medium-high — latest sonnet)
+gpt-5.3-codex  (high — advanced coding)
+claude-opus-4.6  (high — premium quality)"
+  local DEFAULT_CODEX_MODELS="default
+gpt-5.6-terra  (medium — balanced coding)
+gpt-5.6-luna  (low — fast and economical)
+gpt-5.5  (high — complex coding and research)"
+
+  case "$PROVIDER" in
+    cursor)
+      MODEL_LIST="${CURSOR_MODELS:+default
+$(ui_print "$CURSOR_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+      MODEL_LIST="${MODEL_LIST:-$DEFAULT_CURSOR_MODELS}"
+      ;;
+    copilot)
+      MODEL_LIST="${COPILOT_MODELS:+default
+$(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+      MODEL_LIST="${MODEL_LIST:-$DEFAULT_COPILOT_MODELS}"
+      ;;
+    codex)
+      MODEL_LIST="${CODEX_MODELS:+default
+$(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+      MODEL_LIST="${MODEL_LIST:-$DEFAULT_CODEX_MODELS}"
+      ;;
+    *)
+      ui_error "Unsupported AI provider '${PROVIDER}' for model selection"
+      return 1
+      ;;
+  esac
+
+  SELECTED=$(ui_print "$MODEL_LIST" | fzf \
+    --prompt="  Model (${PROVIDER})  " \
+    --header="Select the model used for this generation" \
+    --height=50% \
+    --border=rounded \
+    --margin=0,1,0,1)
+
+  [ -z "$SELECTED" ] && return 1
+
+  SELECTED=$(ui_print "$SELECTED" | sed 's/[[:space:]]*(.*)//')
+  [ "$SELECTED" != "default" ] && export MODEL="$SELECTED"
 }

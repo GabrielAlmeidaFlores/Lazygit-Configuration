@@ -20,7 +20,7 @@ _run_with_timeout() {
   elif command -v gtimeout >/dev/null 2>&1; then
     gtimeout "$DURATION" "$@"
   else
-    "$@" &
+    "$@" <&0 &
     local PID=$!
     ( sleep "$DURATION" && kill "$PID" 2>/dev/null ) &
     local WATCHER=$!
