@@ -356,40 +356,39 @@ _scm_azure_pr_comment() {
 
 # _scm_azure_pr_comment_inline PR_ID BODY FILE LINE COMMIT
 # Posts an inline thread comment at FILE:LINE.
-# Falls back to a general comment if the inline post fails.
-# Prints "inline" or "general" on success.
+# Prints "inline" on success, returns 1 on failure.
 _scm_azure_pr_comment_inline() {
   local PR_ID="$1" BODY="$2" FILE_PATH="$3" LINE="$4"
 
-  if [ -n "$FILE_PATH" ] && [ -n "$LINE" ]; then
-    local PAYLOAD
-    PAYLOAD=$(jq -n \
-      --arg body "$BODY" \
-      --arg file "/$FILE_PATH" \
-      --argjson line "$LINE" \
-      '{
-        "comments": [{"parentCommentId": 0, "content": $body, "commentType": 1}],
-        "status": 1,
-        "threadContext": {
-          "filePath": $file,
-          "rightFileStart": {"line": $line, "offset": 1},
-          "rightFileEnd":   {"line": $line, "offset": 1}
-        }
-      }')
+  [ -n "$FILE_PATH" ] && [ -n "$LINE" ] || return 1
 
-    local RESULT ERR_FILE
-    ERR_FILE=$(mktemp)
-    RESULT=$(_az_curl POST \
-      "${_AZ_API_BASE}/pullrequests/${PR_ID}/threads?api-version=7.1" \
-      "$PAYLOAD" 2>"$ERR_FILE")
-    local CURL_EXIT=$?
-    rm -f "$ERR_FILE"
+  local PAYLOAD
+  PAYLOAD=$(jq -n \
+    --arg body "$BODY" \
+    --arg file "/$FILE_PATH" \
+    --argjson line "$LINE" \
+    '{
+      "comments": [{"parentCommentId": 0, "content": $body, "commentType": 1}],
+      "status": 1,
+      "threadContext": {
+        "filePath": $file,
+        "rightFileStart": {"line": $line, "offset": 1},
+        "rightFileEnd":   {"line": $line, "offset": 1}
+      }
+    }')
 
-    if [ $CURL_EXIT -eq 0 ] && ui_print "$RESULT" | jq -e '.id' >/dev/null 2>&1; then
-      ui_print "inline"
-      return 0
-    fi
+  local RESULT ERR_FILE
+  ERR_FILE=$(mktemp)
+  RESULT=$(_az_curl POST \
+    "${_AZ_API_BASE}/pullrequests/${PR_ID}/threads?api-version=7.1" \
+    "$PAYLOAD" 2>"$ERR_FILE")
+  local CURL_EXIT=$?
+  rm -f "$ERR_FILE"
+
+  if [ $CURL_EXIT -eq 0 ] && ui_print "$RESULT" | jq -e '.id' >/dev/null 2>&1; then
+    ui_print "inline"
+    return 0
   fi
 
-  _scm_azure_pr_comment "$PR_ID" "$BODY"
+  return 1
 }

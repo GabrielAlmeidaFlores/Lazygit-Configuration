@@ -50,3 +50,20 @@ setup() {
 
   [ "$status" -eq 1 ]
 }
+
+@test "_scm_github_pr_comment_inline: rejects a comment without a location" {
+  _gh() { return 99; }
+
+  run _scm_github_pr_comment_inline 6 "Review comment" "" "" "commit"
+
+  [ "$status" -eq 1 ]
+}
+
+@test "_scm_github_pr_comment_inline: posts an inline review comment" {
+  _gh() { return 0; }
+
+  run _scm_github_pr_comment_inline 6 "Review comment" "src/app.ts" 12 "commit"
+
+  [ "$status" -eq 0 ]
+  [ "$output" = "inline" ]
+}

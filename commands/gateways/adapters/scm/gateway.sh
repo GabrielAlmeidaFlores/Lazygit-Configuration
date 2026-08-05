@@ -33,8 +33,7 @@
 #     Prints "general" on success.
 #
 #   scm_pr_comment_inline PR_ID BODY FILE LINE COMMIT
-#     Posts an inline comment at FILE:LINE. Falls back to a general comment
-#     if the inline post fails. Prints "inline" or "general" on success.
+#     Posts an inline comment at FILE:LINE. Prints "inline" on success.
 
 SCM_PROVIDER=""
 

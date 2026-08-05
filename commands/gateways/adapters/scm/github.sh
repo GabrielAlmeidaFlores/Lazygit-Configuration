@@ -158,27 +158,21 @@ _scm_github_pr_comment() {
 
 # _scm_github_pr_comment_inline PR_ID BODY FILE LINE COMMIT
 # Posts an inline review comment at FILE:LINE using the GitHub REST API.
-# Falls back to a general comment if the inline post fails.
-# Prints "inline" or "general" on success, returns 1 on failure.
+# Prints "inline" on success, returns 1 on failure.
 _scm_github_pr_comment_inline() {
   local PR_NUM="$1" BODY="$2" FILE_PATH="$3" LINE="$4" COMMIT="$5"
 
-  if [ -n "$FILE_PATH" ] && [ -n "$LINE" ] && [ -n "$COMMIT" ]; then
-    if _gh api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
-        --method POST \
-        --field body="$BODY" \
-        --field commit_id="$COMMIT" \
-        --field path="$FILE_PATH" \
-        --field line="$LINE" \
-        --field side="RIGHT" \
-        >/dev/null 2>&1; then
-      ui_print "inline"
-      return 0
-    fi
-  fi
+  [ -n "$FILE_PATH" ] && [ -n "$LINE" ] && [ -n "$COMMIT" ] || return 1
 
-  if _gh pr comment "$PR_NUM" --body "$BODY" 2>/dev/null; then
-    ui_print "general"
+  if _gh api "repos/{owner}/{repo}/pulls/${PR_NUM}/comments" \
+      --method POST \
+      --field body="$BODY" \
+      --field commit_id="$COMMIT" \
+      --field path="$FILE_PATH" \
+      --field line="$LINE" \
+      --field side="RIGHT" \
+      >/dev/null 2>&1; then
+    ui_print "inline"
     return 0
   fi
 

@@ -176,7 +176,7 @@ prompts:
       (use this when there are no issues)
 
       ANALYSIS_STATUS: ISSUES_FOUND
-      ISSUE: <one issue per line, include filename if visible>
+      ISSUE: <file_path>:<new_line_number> - <one issue per line>
       (use this when issues are found)
 
     EXAMPLE — no issues:
@@ -184,8 +184,8 @@ prompts:
 
     EXAMPLE — issues found:
     ANALYSIS_STATUS: ISSUES_FOUND
-    ISSUE: Missing input validation on user endpoint (auth.service.ts)
-    ISSUE: API key logged in debug mode (logger.ts)
+    ISSUE: src/auth.service.ts:42 - Missing input validation on user endpoint
+    ISSUE: src/logger.ts:18 - API key logged in debug mode
 
     Begin your response now (never use em dashes — and no emojis):
 
@@ -228,7 +228,7 @@ prompts:
       (use this when there are no real issues)
 
       ANALYSIS_STATUS: ISSUES_FOUND
-      ISSUE: <one issue per line, include filename if visible>
+      ISSUE: <file_path>:<new_line_number> - <one issue per line>
       (use this when issues are found)
 
     EXAMPLE — no issues:
@@ -236,8 +236,8 @@ prompts:
 
     EXAMPLE — issues found:
     ANALYSIS_STATUS: ISSUES_FOUND
-    ISSUE: Missing input validation on user endpoint (auth.service.ts)
-    ISSUE: API key logged in debug mode (logger.ts)
+    ISSUE: src/auth.service.ts:42 - Missing input validation on user endpoint
+    ISSUE: src/logger.ts:18 - API key logged in debug mode
 
     Begin your response now (never use em dashes — and no emojis):
 
@@ -283,7 +283,7 @@ prompts:
       (use this when no issues survive validation)
 
       ANALYSIS_STATUS: ISSUES_FOUND
-      ISSUE: <only confirmed issues, include filename if visible>
+      ISSUE: <file_path>:<new_line_number> - <only confirmed issues>
       (use this when at least one issue is confirmed)
 
     Begin your response now (never use em dashes — and no emojis):

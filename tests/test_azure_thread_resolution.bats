@@ -43,3 +43,11 @@ setup() {
 
   [ "$status" -eq 1 ]
 }
+
+@test "_scm_azure_pr_comment_inline: rejects a comment without a location" {
+  _az_curl() { return 99; }
+
+  run _scm_azure_pr_comment_inline 6 "Review comment" "" "" "commit"
+
+  [ "$status" -eq 1 ]
+}

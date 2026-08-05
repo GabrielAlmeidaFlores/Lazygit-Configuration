@@ -202,7 +202,7 @@ ui_panel \
 get_diff_location() {
   local FILENAME="$1" DIFF="$2"
   ui_print "$DIFF" | awk -v fn="$FILENAME" '
-    $0 ~ ("\\+\\+\\+ b/.*" fn) {
+    /^\+\+\+ b\// && substr($0, 7) == fn {
       file_path = substr($0, 7)
       in_file = 1; current_line = 0; next
     }
@@ -224,7 +224,7 @@ get_diff_location() {
 _diff_line_valid() {
   local FILE_PATH="$1" TARGET="$2" DIFF="$3"
   ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v target="$TARGET" '
-    $0 ~ ("\\+\\+\\+ b/.*" fn) { in_file=1; cur=0; next }
+    /^\+\+\+ b\// && substr($0, 7) == fn { in_file=1; cur=0; next }
     /^diff --git/ && in_file { exit }
     in_file && /^@@ / {
       sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
@@ -245,7 +245,7 @@ _diff_line_valid() {
 _find_nearest_diff_line() {
   local FILE_PATH="$1" TARGET="$2" DIFF="$3"
   ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v target="$TARGET" '
-    $0 ~ ("\\+\\+\\+ b/.*" fn) { fp=substr($0,7); in_file=1; cur=0; next }
+    /^\+\+\+ b\// && substr($0, 7) == fn { fp=substr($0,7); in_file=1; cur=0; next }
     /^diff --git/ && in_file { exit }
     in_file && /^@@ / {
       sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
@@ -268,7 +268,7 @@ _find_diff_line_by_keyword() {
   local FILE_PATH="$1" KEYWORD="$2" DIFF="$3"
   [ -z "$KEYWORD" ] && return 1
   ui_print "$DIFF" | awk -v fn="$FILE_PATH" -v kw="$KEYWORD" '
-    $0 ~ ("\\+\\+\\+ b/.*" fn) { fp=substr($0,7); in_file=1; cur=0; next }
+    /^\+\+\+ b\// && substr($0, 7) == fn { fp=substr($0,7); in_file=1; cur=0; next }
     /^diff --git/ && in_file { exit }
     in_file && /^@@ / {
       sub(/^@@ -[0-9,]* \+/, ""); sub(/,.*/, ""); sub(/ @@.*/, "")
@@ -284,8 +284,7 @@ _find_diff_line_by_keyword() {
 }
 
 # post_review_comment PR_NUMBER BODY FILE_PATH LINE COMMIT_SHA
-# Delegates to scm_pr_comment_inline, which attempts an inline comment and
-# falls back to a general comment automatically. Prints "inline" or "general".
+# Delegates to scm_pr_comment_inline. Prints "inline" on success.
 post_review_comment() {
   scm_pr_comment_inline "$1" "$2" "$3" "$4" "$5"
 }
@@ -310,6 +309,20 @@ _parse_comment_response() {
   _COMMENT_TEXT=$(ui_print "$RESPONSE" | grep -iv "^LOCATION:" | sed -n '/[^[:space:]]/,$p')
   [ -z "$_COMMENT_LOCATION" ] && _COMMENT_LOCATION="unknown"
   [ -z "$_COMMENT_TEXT" ]     && _COMMENT_TEXT="$RESPONSE"
+}
+
+# _parse_issue_location ISSUE
+# Extracts a file path and new-file line number from an analysis issue.
+# Sets _ISSUE_PATH and _ISSUE_LINE; both are empty when no valid location is present.
+_parse_issue_location() {
+  local ISSUE="$1" LOCATION
+  LOCATION=$(ui_print "$ISSUE" | grep -oE '[[:alnum:]_./-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json|yml|yaml|sh|sql|html|css|md):[0-9]+' | head -1)
+  _ISSUE_PATH="${LOCATION%:*}"
+  _ISSUE_LINE="${LOCATION##*:}"
+  if [ -z "$LOCATION" ]; then
+    _ISSUE_PATH=""
+    _ISSUE_LINE=""
+  fi
 }
 
 # _resolve_comment_location AI_LOCATION FILENAME ISSUE_TEXT DIFF
@@ -693,7 +706,10 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
   TEXT=$(ui_print "$ISSUE" | sed 's/^\[[^]]*\] //')
   PR_CONTEXT="PR #${PR_NUMBER}  ·  ${PR_TITLE}"
 
-  FILENAME=$(ui_print "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json)' | head -1)
+  _parse_issue_location "$TEXT"
+  FILENAME="$_ISSUE_PATH"
+  ISSUE_LOCATION="${_ISSUE_PATH:+${_ISSUE_PATH}:${_ISSUE_LINE}}"
+  [ -n "$FILENAME" ] || FILENAME=$(ui_print "$TEXT" | grep -oE '[a-zA-Z0-9_-]+\.(ts|js|tsx|jsx|py|rb|go|java|cs|php|kt|rs|cpp|c|h|vue|json|yml|yaml|sh|sql|html|css|md)' | head -1)
   SNIPPET=""
   if [ -n "$FILENAME" ]; then
     SNIPPET=$(ui_print "$PR_DIFF" | awk -v fn="$FILENAME" '
@@ -733,7 +749,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
         GENERATED=$(generative_ia "$COMMENT_PROMPT" 0)
         if [ $? -eq 0 ] && [ -n "$GENERATED" ]; then
           _parse_comment_response "$GENERATED"
-          _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$TEXT" "$PR_DIFF"
+          _resolve_comment_location "${ISSUE_LOCATION:-$_COMMENT_LOCATION}" "$FILENAME" "$TEXT" "$PR_DIFF"
           post_review_comment "$PR_NUMBER" "$_COMMENT_TEXT" \
             "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT" >/dev/null 2>&1
         fi
@@ -774,7 +790,7 @@ for ISSUE in "${ALL_ISSUES[@]}"; do
 
         case "$REVIEW" in
           post)
-            _resolve_comment_location "$_COMMENT_LOCATION" "$FILENAME" "$TEXT" "$PR_DIFF"
+            _resolve_comment_location "${ISSUE_LOCATION:-$_COMMENT_LOCATION}" "$FILENAME" "$TEXT" "$PR_DIFF"
             POST_RESULT=$(post_review_comment \
               "$PR_NUMBER" "$GENERATED_COMMENT" \
               "$_DIFF_PATH" "$_DIFF_LINE" "$PR_COMMIT")
