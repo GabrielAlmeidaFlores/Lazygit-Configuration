@@ -27,13 +27,17 @@ providers:
     bin: ""
     # Agent mode: ask (read-only Q&A) | plan (read-only planning)
     mode: ask
+    # Model selected when choosing "default" in the model picker.
+    default_model: "gpt-5.4-nano-none"
     # Comma-separated model list shown in the fzf model selector.
     # Leave empty to use the built-in defaults.
-    models: "gpt-4o-mini (low — fast and economical),gpt-4o (medium — balanced),gpt-4.1 (medium — balanced),claude-sonnet-4-5 (medium — strong reasoning),gemini-2.5-pro (medium — multimodal),claude-4-5 (medium-high — latest sonnet),claude-opus-4 (high — premium quality),o3 (high — deep reasoning)"
+    models: "gpt-5.4-nano-none (low — fastest and most economical),gpt-5.4-mini-low (medium — economical coding),gpt-5.3-codex-low (medium — coding),gemini-3.6-flash-minimal (low — fast general use),claude-sonnet-5-low (medium — balanced reasoning)"
 
   copilot:
     # Path to Copilot CLI binary (empty = auto-detect from PATH)
     bin: ""
+    # Model selected when choosing "default" in the model picker.
+    default_model: "gemini-3.1-pro-preview"
     # Comma-separated model list shown in the fzf model selector.
     # Leave empty to use the built-in defaults.
     models: "gemini-3.1-pro-preview (medium — fast and capable),claude-sonnet-4.5 (medium — balanced quality),claude-sonnet-4.6 (medium-high — latest sonnet),gpt-5.3-codex (high — advanced coding),claude-opus-4.6 (high — premium quality)"
@@ -41,6 +45,8 @@ providers:
   codex:
     # Path to OpenAI Codex CLI binary (empty = auto-detect from PATH)
     bin: ""
+    # Model selected when choosing "default" in the model picker.
+    default_model: "gpt-5.6-luna"
     # Comma-separated model list shown in the fzf model selector.
     # Leave empty to use the built-in defaults.
     models: "gpt-5.6-terra (medium — balanced coding),gpt-5.6-luna (low — fast and economical),gpt-5.5 (high — complex coding and research)"

@@ -82,11 +82,33 @@ teardown() {
 
 @test "config_select_model: sets the selected Codex model" {
   AI_PROVIDER="codex"
-  CODEX_MODELS="gpt-5.6-terra (medium — balanced coding)"
+  CODEX_MODELS="gpt-5.6-luna (low — fast and economical)"
   MODEL=""
-  MOCK_FZF_OUTPUT="gpt-5.6-terra (medium — balanced coding)"
+  MOCK_FZF_OUTPUT="gpt-5.6-luna (low — fast and economical)"
 
   config_select_model
 
-  [ "$MODEL" = "gpt-5.6-terra" ]
+  [ "$MODEL" = "gpt-5.6-luna" ]
+}
+
+@test "config_select_model: applies the configured default model" {
+  AI_PROVIDER="codex"
+  CODEX_DEFAULT_MODEL="gpt-5.6-luna"
+  MODEL=""
+  MOCK_FZF_OUTPUT="default"
+
+  config_select_model
+
+  [ "$MODEL" = "gpt-5.6-luna" ]
+}
+
+@test "config_get_default_model: returns each provider default" {
+  CURSOR_DEFAULT_MODEL="gpt-5.4-nano-none"
+  COPILOT_DEFAULT_MODEL="gemini-3.1-pro-preview"
+  CODEX_DEFAULT_MODEL="gpt-5.6-luna"
+  MODEL=""
+
+  [ "$(config_get_default_model cursor)" = "gpt-5.4-nano-none" ]
+  [ "$(config_get_default_model copilot)" = "gemini-3.1-pro-preview" ]
+  [ "$(config_get_default_model codex)" = "gpt-5.6-luna" ]
 }

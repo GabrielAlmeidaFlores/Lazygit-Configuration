@@ -259,16 +259,19 @@ Customize which models appear in the interactive selector:
 providers:
   # Comma-separated. Leave empty to use built-in defaults.
   cursor:
-    models: "claude-sonnet-4-5,claude-opus-4,gpt-4o,o3"
+    default_model: "gpt-5.4-nano-none"
+    models: "gpt-5.4-nano-none,gpt-5.4-mini-low,gpt-5.3-codex-low"
   copilot:
-    models: "claude-sonnet-4.6,claude-sonnet-4.5,gpt-5.3-codex"
+    default_model: "gemini-3.1-pro-preview"
+    models: "gemini-3.1-pro-preview,claude-sonnet-4.6,claude-sonnet-4.5,gpt-5.3-codex"
   codex:
-    models: "gpt-5.6-terra,gpt-5.6-luna,gpt-5.5"
+    default_model: "gpt-5.6-luna"
+    models: "gpt-5.6-luna,gpt-5.6-terra,gpt-5.5"
 ```
 
 **Copilot built-in defaults:** `claude-sonnet-4.6, claude-sonnet-4.5, claude-opus-4.6, gpt-5.3-codex, gemini-3.1-pro-preview`
 
-**Cursor built-in defaults:** `claude-sonnet-4-5, claude-opus-4, gpt-4o, gpt-4.1, o3, gemini-2.5-pro`
+**Cursor built-in defaults:** `gpt-5.4-nano-none, gpt-5.4-mini-low, gpt-5.3-codex-low, gemini-3.6-flash-minimal, claude-sonnet-5-low`
 
 **Codex built-in defaults:** `gpt-5.6-terra, gpt-5.6-luna, gpt-5.5`. Model availability depends on the authenticated Codex account. Codex runs non-interactively with `--sandbox read-only`.
 

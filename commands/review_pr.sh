@@ -58,14 +58,11 @@ config_select_provider || { ui_cancel; exit 0; }
 CURRENT_PROVIDER="$AI_PROVIDER"
 
 DEFAULT_CURSOR_MODELS="default
-gpt-4o-mini  (low — fast and economical)
-gpt-4o  (medium — balanced)
-gpt-4.1  (medium — balanced)
-claude-4-5-sonnet  (medium — strong reasoning)
-gemini-2.5-pro  (medium — multimodal)
-claude-4-5  (medium-high — latest sonnet)
-claude-4-opus  (high — premium quality)
-o3  (high — deep reasoning)"
+gpt-5.4-nano-none  (low — fastest and most economical)
+gpt-5.4-mini-low  (medium — economical coding)
+gpt-5.3-codex-low  (medium — coding)
+gemini-3.6-flash-minimal  (low — fast general use)
+claude-sonnet-5-low  (medium — balanced reasoning)"
 
 DEFAULT_COPILOT_MODELS="default
 gemini-3.1-pro-preview  (medium — fast and capable)
@@ -112,7 +109,9 @@ if [ "$SELECTED_ANALYSIS_MODEL" != "default" ]; then
   export MODEL="$SELECTED_ANALYSIS_MODEL"
   ANALYSIS_MODEL_LABEL="$SELECTED_ANALYSIS_MODEL"
 else
-  ANALYSIS_MODEL_LABEL="${MODEL:-default}"
+  MODEL=$(config_get_default_model "$CURRENT_PROVIDER") || { ui_error "No default model configured for $CURRENT_PROVIDER"; exit 1; }
+  export MODEL
+  ANALYSIS_MODEL_LABEL="$MODEL"
 fi
 
 ANALYSES_RAW=$(ui_print "Architecture  (separation of concerns, SOLID, coupling)

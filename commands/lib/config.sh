@@ -10,6 +10,7 @@
 #   AI_PROVIDER, MODEL, FALLBACK_MODEL, MAX_RETRIES, TIMEOUT
 #   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, CODEX_BIN, AZURE_DEVOPS_PAT
 #   CURSOR_MODELS, COPILOT_MODELS, CODEX_MODELS
+#   CURSOR_DEFAULT_MODEL, COPILOT_DEFAULT_MODEL, CODEX_DEFAULT_MODEL
 #   PROMPT_COMMIT_TEMPLATE, PROMPT_BRANCH_TEMPLATE
 #   PROMPT_ANALYSIS_TEMPLATE, PROMPT_ANALYSIS_PASS2_TEMPLATE
 #   PROMPT_ANALYSIS_PASS3_TEMPLATE, PROMPT_COMMENT_TEMPLATE
@@ -20,6 +21,7 @@
 #
 # Functions defined after sourcing:
 #   config_select_provider
+#   config_get_default_model
 #   config_select_model
 
 _CFG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,6 +109,9 @@ if [ "${_CFG_SKIP_LOAD:-0}" != "1" ]; then
   CURSOR_MODELS=$(yq '.providers.cursor.models // ""'     "$_CONFIG_FILE")
   COPILOT_MODELS=$(yq '.providers.copilot.models // ""'   "$_CONFIG_FILE")
   CODEX_MODELS=$(_cfg_str '.providers.codex.models // ""' "$_CONFIG_FILE")
+  CURSOR_DEFAULT_MODEL=$(_cfg_str '.providers.cursor.default_model // "gpt-5.4-nano-none"' "$_CONFIG_FILE")
+  COPILOT_DEFAULT_MODEL=$(_cfg_str '.providers.copilot.default_model // "gemini-3.1-pro-preview"' "$_CONFIG_FILE")
+  CODEX_DEFAULT_MODEL=$(_cfg_str '.providers.codex.default_model // "gpt-5.6-luna"' "$_CONFIG_FILE")
 
   PROMPT_COMMIT_TEMPLATE=$(yq '.prompts.commit'                            "$_CONFIG_FILE")
   PROMPT_BRANCH_TEMPLATE=$(yq '.prompts.branch'                            "$_CONFIG_FILE")
@@ -171,6 +176,22 @@ config_select_provider() {
   fi
 }
 
+# config_get_default_model [PROVIDER]
+# Returns the configured global model or the explicit default for PROVIDER.
+# Exit codes: 0 = model returned, 1 = provider unsupported.
+config_get_default_model() {
+  local PROVIDER="${1:-$AI_PROVIDER}"
+
+  [ -n "$MODEL" ] && ui_print "$MODEL" && return 0
+
+  case "$PROVIDER" in
+    cursor)  ui_print "$CURSOR_DEFAULT_MODEL" ;;
+    copilot) ui_print "$COPILOT_DEFAULT_MODEL" ;;
+    codex)   ui_print "$CODEX_DEFAULT_MODEL" ;;
+    *)       return 1 ;;
+  esac
+}
+
 # config_select_model [PROVIDER]
 # Shows an fzf picker for the selected provider's models and updates MODEL.
 # The default option retains the model configured in settings.yaml.
@@ -178,14 +199,11 @@ config_select_provider() {
 config_select_model() {
   local PROVIDER="${1:-$AI_PROVIDER}" MODEL_LIST SELECTED
   local DEFAULT_CURSOR_MODELS="default
-gpt-4o-mini  (low — fast and economical)
-gpt-4o  (medium — balanced)
-gpt-4.1  (medium — balanced)
-claude-4-5-sonnet  (medium — strong reasoning)
-gemini-2.5-pro  (medium — multimodal)
-claude-4-5  (medium-high — latest sonnet)
-claude-4-opus  (high — premium quality)
-o3  (high — deep reasoning)"
+gpt-5.4-nano-none  (low — fastest and most economical)
+gpt-5.4-mini-low  (medium — economical coding)
+gpt-5.3-codex-low  (medium — coding)
+gemini-3.6-flash-minimal  (low — fast general use)
+claude-sonnet-5-low  (medium — balanced reasoning)"
   local DEFAULT_COPILOT_MODELS="default
 gemini-3.1-pro-preview  (medium — fast and capable)
 claude-sonnet-4.5  (medium — balanced quality)
@@ -229,5 +247,10 @@ $(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
   [ -z "$SELECTED" ] && return 1
 
   SELECTED=$(ui_print "$SELECTED" | sed 's/[[:space:]]*(.*)//')
-  [ "$SELECTED" != "default" ] && export MODEL="$SELECTED"
+  if [ "$SELECTED" = "default" ]; then
+    MODEL=$(config_get_default_model "$PROVIDER") || return 1
+    export MODEL
+  else
+    export MODEL="$SELECTED"
+  fi
 }
