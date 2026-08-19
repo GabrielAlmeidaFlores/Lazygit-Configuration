@@ -76,6 +76,14 @@ gpt-5.6-terra  (medium — balanced coding)
 gpt-5.6-luna  (low — fast and economical)
 gpt-5.5  (high — complex coding and research)"
 
+DEFAULT_KIRO_MODELS="default
+claude-sonnet-4.6  (medium — balanced agentic)
+gpt-5.6-luna  (low — fast and economical)
+claude-haiku-4.5  (low — quick iterations)
+gpt-5.6-terra  (medium — balanced coding)
+claude-opus-4.6  (high — premium quality)
+auto  (router — optimal per task)"
+
 case "$CURRENT_PROVIDER" in
   cursor)
     MODEL_LIST="${CURSOR_MODELS:+default
@@ -91,6 +99,11 @@ $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
     MODEL_LIST="${CODEX_MODELS:+default
 $(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
     MODEL_LIST="${MODEL_LIST:-$DEFAULT_CODEX_MODELS}"
+    ;;
+  kiro)
+    MODEL_LIST="${KIRO_MODELS:+default
+$(ui_print "$KIRO_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+    MODEL_LIST="${MODEL_LIST:-$DEFAULT_KIRO_MODELS}"
     ;;
 esac
 

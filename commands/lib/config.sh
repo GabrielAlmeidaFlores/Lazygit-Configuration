@@ -8,9 +8,10 @@
 #
 # Globals exported after sourcing:
 #   AI_PROVIDER, MODEL, MAX_RETRIES, TIMEOUT
-#   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, CODEX_BIN, AZURE_DEVOPS_PAT
-#   CURSOR_MODELS, COPILOT_MODELS, CODEX_MODELS
-#   CURSOR_DEFAULT_MODEL, COPILOT_DEFAULT_MODEL, CODEX_DEFAULT_MODEL
+#   CURSOR_BIN, CURSOR_MODE, COPILOT_BIN, CODEX_BIN, KIRO_BIN, AZURE_DEVOPS_PAT
+#   CURSOR_MODELS, COPILOT_MODELS, CODEX_MODELS, KIRO_MODELS
+#   CURSOR_DEFAULT_MODEL, COPILOT_DEFAULT_MODEL, CODEX_DEFAULT_MODEL, KIRO_DEFAULT_MODEL
+#   KIRO_EFFORT, KIRO_TRUST_TOOLS
 #   PROMPT_COMMIT_TEMPLATE, PROMPT_BRANCH_TEMPLATE
 #   PROMPT_ANALYSIS_TEMPLATE, PROMPT_ANALYSIS_PASS2_TEMPLATE
 #   PROMPT_ANALYSIS_PASS3_TEMPLATE, PROMPT_COMMENT_TEMPLATE
@@ -52,9 +53,9 @@ _cfg_validate() {
   local _ERRORS=0
 
   case "$AI_PROVIDER" in
-    cursor|copilot|codex) ;;
+    cursor|copilot|codex|kiro) ;;
     *)
-      ui_error "settings.yaml: ai.provider must be 'cursor', 'copilot', or 'codex' (got: '${AI_PROVIDER}')"
+      ui_error "settings.yaml: ai.provider must be 'cursor', 'copilot', 'codex', or 'kiro' (got: '${AI_PROVIDER}')"
       _ERRORS=$((_ERRORS + 1))
       ;;
   esac
@@ -104,13 +105,18 @@ if [ "${_CFG_SKIP_LOAD:-0}" != "1" ]; then
   CURSOR_MODE=$(yq '.providers.cursor.mode // "ask"'      "$_CONFIG_FILE")
   COPILOT_BIN=$(_cfg_str '.providers.copilot.bin // ""'   "$_CONFIG_FILE")
   CODEX_BIN=$(_cfg_str '.providers.codex.bin // ""'       "$_CONFIG_FILE")
+  KIRO_BIN=$(_cfg_str '.providers.kiro.bin // ""'         "$_CONFIG_FILE")
+  KIRO_EFFORT=$(_cfg_str '.providers.kiro.effort // ""'   "$_CONFIG_FILE")
+  KIRO_TRUST_TOOLS=$(_cfg_str '.providers.kiro.trust_tools // ""' "$_CONFIG_FILE")
   AZURE_DEVOPS_PAT="${AZURE_DEVOPS_PAT:-$(_cfg_str '.azure_devops.pat // ""' "$_CONFIG_FILE")}"
   CURSOR_MODELS=$(yq '.providers.cursor.models // ""'     "$_CONFIG_FILE")
   COPILOT_MODELS=$(yq '.providers.copilot.models // ""'   "$_CONFIG_FILE")
   CODEX_MODELS=$(_cfg_str '.providers.codex.models // ""' "$_CONFIG_FILE")
+  KIRO_MODELS=$(_cfg_str '.providers.kiro.models // ""'  "$_CONFIG_FILE")
   CURSOR_DEFAULT_MODEL=$(_cfg_str '.providers.cursor.default_model // "gpt-5.4-nano-none"' "$_CONFIG_FILE")
   COPILOT_DEFAULT_MODEL=$(_cfg_str '.providers.copilot.default_model // "gemini-3.1-pro-preview"' "$_CONFIG_FILE")
   CODEX_DEFAULT_MODEL=$(_cfg_str '.providers.codex.default_model // "gpt-5.6-luna"' "$_CONFIG_FILE")
+  KIRO_DEFAULT_MODEL=$(_cfg_str '.providers.kiro.default_model // "claude-sonnet-4.6"' "$_CONFIG_FILE")
 
   PROMPT_COMMIT_TEMPLATE=$(yq '.prompts.commit'                            "$_CONFIG_FILE")
   PROMPT_BRANCH_TEMPLATE=$(yq '.prompts.branch'                            "$_CONFIG_FILE")
@@ -145,14 +151,14 @@ config_select_provider() {
   fi
   [ -z "$LAST_PROVIDER" ] && LAST_PROVIDER="${AI_PROVIDER:-copilot}"
   case "$LAST_PROVIDER" in
-    cursor|copilot|codex) ;;
+    cursor|copilot|codex|kiro) ;;
     *) LAST_PROVIDER="${AI_PROVIDER:-copilot}" ;;
   esac
 
   local SELECTED PROVIDER
   SELECTED=$({
     ui_print "$LAST_PROVIDER"
-    for PROVIDER in cursor copilot codex; do
+    for PROVIDER in cursor copilot codex kiro; do
       [ "$PROVIDER" != "$LAST_PROVIDER" ] && ui_print "$PROVIDER"
     done
   } | fzf \
@@ -187,6 +193,7 @@ config_get_default_model() {
     cursor)  ui_print "$CURSOR_DEFAULT_MODEL" ;;
     copilot) ui_print "$COPILOT_DEFAULT_MODEL" ;;
     codex)   ui_print "$CODEX_DEFAULT_MODEL" ;;
+    kiro)    ui_print "$KIRO_DEFAULT_MODEL" ;;
     *)       return 1 ;;
   esac
 }
@@ -213,6 +220,13 @@ claude-opus-4.6  (high — premium quality)"
 gpt-5.6-terra  (medium — balanced coding)
 gpt-5.6-luna  (low — fast and economical)
 gpt-5.5  (high — complex coding and research)"
+  local DEFAULT_KIRO_MODELS="default
+claude-sonnet-4.6  (medium — balanced agentic)
+gpt-5.6-luna  (low — fast and economical)
+claude-haiku-4.5  (low — quick iterations)
+gpt-5.6-terra  (medium — balanced coding)
+claude-opus-4.6  (high — premium quality)
+auto  (router — optimal per task)"
 
   case "$PROVIDER" in
     cursor)
@@ -229,6 +243,11 @@ $(ui_print "$COPILOT_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
       MODEL_LIST="${CODEX_MODELS:+default
 $(ui_print "$CODEX_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
       MODEL_LIST="${MODEL_LIST:-$DEFAULT_CODEX_MODELS}"
+      ;;
+    kiro)
+      MODEL_LIST="${KIRO_MODELS:+default
+$(ui_print "$KIRO_MODELS" | tr ',' '\n' | sed 's/^ *//')}"
+      MODEL_LIST="${MODEL_LIST:-$DEFAULT_KIRO_MODELS}"
       ;;
     *)
       ui_error "Unsupported AI provider '${PROVIDER}' for model selection"

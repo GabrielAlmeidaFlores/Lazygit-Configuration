@@ -125,6 +125,7 @@ commands/
 │           ├── copilot.sh       # GitHub Copilot adapter
 │           ├── cursor.sh        # Cursor Agent adapter
 │           ├── codex.sh         # OpenAI Codex adapter
+│           ├── kiro.sh          # Kiro CLI adapter
 │           └── _helpers.sh      # Shared adapter utilities
 ├── review_pr.sh                 # PR review with sequential analysis
 ├── gen_commit_with_ia.sh        # AI commit message generator
@@ -143,7 +144,7 @@ state.yml                        # Auto-generated (gitignored)
 
 ```
 User Script → config_select_provider() → AI_PROVIDER set interactively
-            → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor / _generative_ia_codex)
+            → generative_ia() → Adapter (_generative_ia_copilot / _generative_ia_cursor / _generative_ia_codex / _generative_ia_kiro)
 ```
 
 #### Configuration (`settings.yaml` → `lib/config.sh`)
@@ -155,6 +156,8 @@ TIMEOUT=60
 ```
 
 Codex calls must use `codex exec --sandbox read-only`.
+
+Kiro calls must use `kiro-cli chat --no-interactive --wrap never` in headless mode with workspace-level model settings.
 
 #### Adding New Providers
 

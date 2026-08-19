@@ -8,7 +8,7 @@
 # ─── AI Gateway ───────────────────────────────────────────────────────────────
 
 ai:
-  # Default provider shown pre-selected in the runtime picker: cursor | copilot | codex
+  # Default provider shown pre-selected in the runtime picker: cursor | copilot | codex | kiro
   provider: codex
   # Primary model — leave empty for provider default
   model: ""
@@ -48,6 +48,19 @@ providers:
     # Comma-separated model list shown in the fzf model selector.
     # Leave empty to use the built-in defaults.
     models: "gpt-5.6-terra (medium — balanced coding),gpt-5.6-luna (low — fast and economical),gpt-5.5 (high — complex coding and research)"
+
+  kiro:
+    # Path to Kiro CLI binary (empty = auto-detect from PATH)
+    bin: ""
+    # Model selected when choosing "default" in the model picker.
+    default_model: "claude-sonnet-4.6"
+    # Comma-separated model list shown in the fzf model selector.
+    # Leave empty to use the built-in defaults.
+    models: "claude-sonnet-4.6 (medium — balanced agentic),gpt-5.6-luna (low — fast),claude-haiku-4.5 (low — quick),gpt-5.6-terra (medium — coding),claude-opus-4.6 (high — premium),auto (router)"
+    # Optional reasoning effort: low | medium | high | xhigh | max
+    effort: ""
+    # Optional comma-separated tool categories to auto-approve (empty = no tool trust)
+    trust_tools: ""
 
 # ─── Azure DevOps ─────────────────────────────────────────────────────────────
 

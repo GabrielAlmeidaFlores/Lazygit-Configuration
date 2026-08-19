@@ -3,7 +3,7 @@
 #
 # Routes calls to the active provider adapter based on AI_PROVIDER, which is
 # loaded from settings.yaml via lib/config.sh and set interactively at runtime.
-# Supported providers: cursor | copilot | codex
+# Supported providers: cursor | copilot | codex | kiro
 #
 # Configuration: settings.yaml (loaded via commands/lib/config.sh)
 #
@@ -44,7 +44,7 @@ generative_ia() {
   if [ "$_PROVIDER" != "$_LOADED_PROVIDER" ]; then
     if [ ! -f "$_ADAPTER_FILE" ]; then
       ui_error "Adapter for provider '${_PROVIDER}' not found at ${_ADAPTER_FILE}" >&2
-      ui_info "Supported providers: cursor, copilot, codex" >&2
+      ui_info "Supported providers: cursor, copilot, codex, kiro" >&2
       return 1
     fi
     source "$_ADAPTER_FILE"
@@ -55,8 +55,9 @@ generative_ia() {
     cursor)  _generative_ia_cursor  "$@" ;;
     copilot) _generative_ia_copilot "$@" ;;
     codex)   _generative_ia_codex   "$@" ;;
+    kiro)    _generative_ia_kiro    "$@" ;;
     *)
-      ui_error "Unknown AI_PROVIDER '${_PROVIDER}'. Supported: cursor, copilot, codex" >&2
+      ui_error "Unknown AI_PROVIDER '${_PROVIDER}'. Supported: cursor, copilot, codex, kiro" >&2
       return 1
       ;;
   esac

@@ -69,6 +69,7 @@ gh auth login
 - [GitHub Copilot CLI](https://www.npmjs.com/package/@github/copilot) — Default AI provider (`copilot` command)
 - [Cursor Agent CLI](https://cursor.com/docs/cli) — Alternative AI provider (`agent` command)
 - [OpenAI Codex CLI](https://developers.openai.com/codex/cli/) — Alternative AI provider (`codex` command)
+- [Kiro CLI](https://kiro.dev/docs/cli/) — Alternative AI provider (`kiro-cli` command)
 - [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) — For Azure DevOps auth via `az login` (alternative to `AZURE_DEVOPS_PAT`)
 
 ---
@@ -126,6 +127,15 @@ agent login
 
 ```bash
 codex login
+```
+
+**Kiro CLI:**
+
+```bash
+curl -fsSL https://cli.kiro.dev/install | bash
+kiro-cli login
+# Or for CI/automation (Pro+ subscription required):
+# export KIRO_API_KEY=ksk_...
 ```
 
 Select the provider at runtime, or set the default under `ai.provider` in `settings.yaml`.
@@ -232,7 +242,7 @@ export AZURE_DEVOPS_PAT="your-pat-here"
 
 ```yaml
 ai:
-  provider: copilot # copilot | cursor | codex
+  provider: copilot # copilot | cursor | codex | kiro
   model: "" # Leave empty for provider default
   max_retries: 2
   timeout: 60
@@ -240,7 +250,7 @@ ai:
 
 | YAML setting | Applies to | Description |
 |---|---|---|
-| `ai.provider` | All | Active provider: `copilot`, `cursor`, or `codex` |
+| `ai.provider` | All | Active provider: `copilot`, `cursor`, `codex`, or `kiro` |
 | `ai.model` | All | Initial model (empty = provider default); failures continue below it in the provider model list |
 | `ai.max_retries` | All | Retry attempts per model |
 | `ai.timeout` | All | Request timeout in seconds |
@@ -248,6 +258,9 @@ ai:
 | `providers.cursor.mode` | Cursor | Agent mode: `ask` or `plan` |
 | `providers.copilot.bin` | Copilot | Path to `copilot` binary (empty = auto-detect) |
 | `providers.codex.bin` | Codex | Path to `codex` binary (empty = auto-detect) |
+| `providers.kiro.bin` | Kiro | Path to `kiro-cli` binary (empty = auto-detect) |
+| `providers.kiro.effort` | Kiro | Optional reasoning effort: `low`, `medium`, `high`, `xhigh`, or `max` |
+| `providers.kiro.trust_tools` | Kiro | Optional comma-separated tool categories (empty = no tool trust) |
 
 ### Model Selection
 
@@ -265,6 +278,11 @@ providers:
   codex:
     default_model: "gpt-5.6-luna"
     models: "gpt-5.6-luna,gpt-5.6-terra,gpt-5.5"
+  kiro:
+    default_model: "claude-sonnet-4.6"
+    models: "claude-sonnet-4.6,gpt-5.6-luna,claude-haiku-4.5,gpt-5.6-terra,claude-opus-4.6,auto"
+    effort: ""
+    trust_tools: ""
 ```
 
 **Copilot built-in defaults:** `claude-sonnet-4.6, claude-sonnet-4.5, claude-opus-4.6, gpt-5.3-codex, gemini-3.1-pro-preview`
@@ -272,6 +290,8 @@ providers:
 **Cursor built-in defaults:** `gpt-5.4-nano-none, gpt-5.4-mini-low, gpt-5.3-codex-low, gemini-3.6-flash-minimal, claude-sonnet-5-low`
 
 **Codex built-in defaults:** `gpt-5.6-terra, gpt-5.6-luna, gpt-5.5`. Model availability depends on the authenticated Codex account. Codex runs non-interactively with `--sandbox read-only`.
+
+**Kiro built-in defaults:** `claude-sonnet-4.6, gpt-5.6-luna, claude-haiku-4.5, gpt-5.6-terra, claude-opus-4.6, auto`. Kiro runs in headless mode (`--no-interactive`) without tool trust by default. List available model IDs with `kiro-cli chat --list-models --format json`.
 
 ### Prompt Templates
 
@@ -342,7 +362,8 @@ gui:
 │   │       │   ├── _helpers.sh           # Shared timeout utilities
 │   │       │   ├── cursor.sh             # Cursor Agent adapter
 │   │       │   ├── copilot.sh            # GitHub Copilot adapter
-│   │       │   └── codex.sh              # OpenAI Codex adapter
+│   │       │   ├── codex.sh              # OpenAI Codex adapter
+│   │       │   └── kiro.sh               # Kiro CLI adapter
 │   │       └── scm/                      # Source control adapters
 │   │           ├── gateway.sh            # SCM gateway — detects provider, uniform API
 │   │           ├── github.sh             # GitHub adapter (gh CLI)
@@ -442,7 +463,7 @@ This usually means the model is rejecting the request. Common causes:
 
 - **Classic PAT in remote URL** — the Copilot CLI does not accept classic GitHub PATs (`ghp_`). The `_resolve_gh_auth` function now isolates the PAT so it is only used for `gh` API calls, not passed to Copilot.
 - **Invalid model name** — verify the model name is in the selected provider's configured model list and supported by your subscription.
-- **Test a model directly:** `copilot --available-tools= --model <model> -p "say: ok"`
+- **Test a model directly:** `copilot --available-tools= --model <model> -p "say: ok"` or `kiro-cli chat --no-interactive "say: ok"`
 
 ### Analysis shows "analysis failed" for all types
 
