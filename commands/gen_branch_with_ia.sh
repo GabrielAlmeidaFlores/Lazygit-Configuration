@@ -33,6 +33,7 @@ trap '_cancel' INT TERM
 clear
 ui_header "🌿  AI Branch Name"
 
+config_select_provider || { ui_cancel; exit 0; }
 config_select_model || { ui_cancel; exit 0; }
 
 FILES_CHANGED=$(git diff --cached --name-only | head -n 10)
